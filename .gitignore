@@ -1,0 +1,15 @@
+# Dataset Kaggle (nặng >100MB, tải lại từ Kaggle — KHÔNG commit)
+PS_20174392719_1491204439457_log.csv
+*.csv.gz
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
