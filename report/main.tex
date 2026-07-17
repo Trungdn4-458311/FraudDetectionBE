@@ -1,0 +1,472 @@
+\documentclass{article}
+
+% Language setting
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+
+% Page size and margins
+\usepackage[a4paper,top=2cm,bottom=2cm,left=3cm,right=3cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{booktabs}
+
+\lstdefinestyle{pythonstyle}{
+    language=Python,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!50!black},
+    stringstyle=\color{orange},
+    numberstyle=\tiny\color{gray},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    showstringspaces=false,
+    frame=single,
+    numbers=left,
+    tabsize=2
+}
+
+\title{Real-Time Payment Fraud Detection for an E-Commerce Platform\\[0.3em]
+\large Business Analytics Group Project --- From Raw Data to a Deployable Model}
+
+\author{%
+  \textbf{Team:} [Insert team member names] \\[0.4em]
+  \textbf{Course:} Business Analytics \\[0.4em]
+  \textbf{Source:} \url{https://github.com/Trungdn4-458311/FraudDetectionBE}%
+}
+\date{}
+
+\begin{document}
+\maketitle
+
+% =========================
+\begin{abstract}
+Payment fraud causes substantial financial loss and erodes customer
+trust on e-commerce platforms. Acting as the risk-analytics function of
+a platform, this project answers a concrete business question:
+\emph{which transactions are likely fraudulent, and how should the
+platform balance blocking fraud against approving legitimate orders
+without unnecessary friction?} We combine \textbf{two data sources}: the
+simulated mobile-money dataset \textbf{PaySim} ($\sim$6.36M
+transactions, fraud rate $0.129\%$) and \textbf{9 contextual features}
+generated in Python with Faker (account age, new-device flag,
+shipping/billing mismatch, IP distance, etc.). The pipeline covers
+exploratory data analysis (EDA), documented before/after cleaning,
+feature engineering, and training of \textbf{three classifiers}
+(Logistic Regression, Random Forest, XGBoost) over \textbf{two feature
+spaces} (Base/Full), evaluated with metrics suited to imbalanced data
+(PR-AUC, Recall, F1) plus a \textbf{cost-based metric} for selecting an
+operating threshold. A key methodological point: the 9 synthetic
+features are generated \emph{conditioned on the label}, introducing
+\textbf{label leakage}; we quantify its effect through the Base-vs-Full
+comparison. Our best models (XGBoost/Random Forest) reach PR-AUC
+$>0.99$, but we show that the near-perfect scores largely reflect the
+\emph{easiness} of the data (PaySim is nearly separable via balance
+features) rather than genuine real-world generalization --- an
+essential conclusion for an honest report.
+\end{abstract}
+
+\noindent\textbf{Keywords:} fraud detection; class imbalance; PaySim;
+synthetic data; label leakage; PR-AUC; cost-based threshold; XGBoost;
+Random Forest.
+
+% =========================
+\section{Introduction}
+\label{sec:intro}
+
+An e-commerce platform processes thousands of transactions per minute,
+and even a fraud rate well under $5\%$ translates into large absolute
+losses. We frame the task as \textbf{binary classification} on a
+\textbf{severely imbalanced} dataset: flag high-risk transactions in
+real time while limiting the number of legitimate customers blocked.
+
+\subsection{Business KPIs}
+\label{subsec:kpi}
+We track three indicators:
+\begin{itemize}
+    \item \textbf{Fraud rate} --- the proportion of fraudulent
+    transactions (measures imbalance and risk scale).
+    \item \textbf{False-positive rate (FPR)} --- the proportion of
+    legitimate transactions wrongly blocked (measures customer friction).
+    \item \textbf{Financial loss avoided} --- the fraud amount stopped
+    by the model (measures business value).
+\end{itemize}
+Across the full dataset the fraud rate is $0.129\%$ ($8{,}213$ out of
+$6{,}362{,}620$ transactions), with a \textbf{total money at risk} of
+$\sim$$1.21\times 10^{10}$ units and a mean of $\sim$$1.47$M per
+fraudulent transaction. This is the baseline against which
+Section~\ref{subsec:cost} is compared.
+
+\subsection{Contributions and structure}
+The report follows the first five modules of the project:
+Section~\ref{sec:data} (Module~1) describes the data and synthetic
+generation; Section~\ref{sec:eda} (Module~2) explores the data;
+Section~\ref{sec:clean} (Module~3) cleans it;
+Section~\ref{sec:feat} (Module~4) engineers features;
+Section~\ref{sec:model} (Module~5) trains, evaluates, and selects an
+operating threshold.
+
+% =========================
+\section{Data and Synthetic Generation (Module 1)}
+\label{sec:data}
+
+\subsection{Source 1 --- PaySim}
+PaySim is a simulated mobile-money dataset of $6{,}362{,}620$
+transactions with fields: \texttt{step} (time index, 1 step = 1 hour),
+\texttt{type} (PAYMENT, TRANSFER, CASH\_OUT, CASH\_IN, DEBIT),
+\texttt{amount}, origin/destination accounts
+(\texttt{nameOrig}/\texttt{nameDest}), pre/post balances of both
+parties, and the label \texttt{isFraud}.
+
+\subsection{Source 2 --- 9 synthetic features (Faker)}
+The project requires additional contextual data generated in Python.
+We create 9 fields with the Faker library plus business logic,
+\emph{injecting a fraud signal} to reflect realistic correlations (e.g.,
+fraudulent accounts tend to be younger and use unfamiliar devices). A
+representative snippet is shown in Listing~\ref{lst:gen}.
+
+\begin{lstlisting}[style=pythonstyle, caption={Generating
+transaction-level features conditioned on the label (excerpt).},
+label={lst:gen}]
+fraud = df["isFraud"].to_numpy(bool)
+# new device: higher probability if fraud
+p_dev = np.where(fraud, 0.55, 0.08)
+df["is_new_device"] = (rng.random(n) < p_dev).astype("int8")
+# failed payment attempts (Poisson)
+lam = np.where(fraud, 2.2, 0.12)
+df["failed_payment_attempts"] = rng.poisson(lam).astype("int16")
+\end{lstlisting}
+
+All 9 fields are documented in a \emph{data dictionary}
+(Table~\ref{tab:datadict}): column name, type, unit, valid range, and
+generation logic.
+
+\begin{table}[H]
+\centering
+\caption{Data dictionary of the 9 synthetic features (source 2).}
+\label{tab:datadict}
+\small
+\begin{tabular}{lll}
+\toprule
+Field & Type / Unit & Generation logic (summary) \\
+\midrule
+\texttt{account\_age\_days}          & int32 / days   & Gamma; fraud accounts younger (mean $\sim$44 vs $\sim$500) \\
+\texttt{home\_country}               & category       & Uniform draw from a Faker country pool \\
+\texttt{device\_fingerprint}         & SHA1           & Sample from a pool of 5{,}000 hashes \\
+\texttt{hour\_of\_day}               & int16 / hour   & \texttt{step} \% 24 \\
+\texttt{shipping\_billing\_mismatch} & 0/1            & Bernoulli $p{=}0.40$ (fraud) / $0.03$ \\
+\texttt{is\_new\_device}             & 0/1            & Bernoulli $p{=}0.55$ (fraud) / $0.08$ \\
+\texttt{failed\_payment\_attempts}   & int16 / count  & Poisson $\lambda{=}2.2$ (fraud) / $0.12$ \\
+\texttt{ip\_billing\_mismatch}       & 0/1            & Bernoulli $p{=}0.50$ (fraud) / $0.02$ \\
+\texttt{ip\_billing\_distance\_km}   & float / km     & Uniform(500,8000) if mismatch, else (0,80) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Label-leakage warning.}
+Because the fields above are drawn \emph{conditioned on}
+\texttt{isFraud}, their predictive power is partly \emph{by design}.
+This is why, throughout the project, we compare two feature spaces
+(Base vs Full, Section~\ref{sec:feat}) and interpret results cautiously
+(Section~\ref{subsec:limit}).
+
+% =========================
+\section{Exploratory Data Analysis (Module 2)}
+\label{sec:eda}
+
+\subsection{Class imbalance}
+The data is severely imbalanced: only $0.129\%$ of transactions are
+fraudulent. Hence \textbf{Accuracy is inappropriate}; we prioritize
+PR-AUC, Recall, and F1.
+
+\subsection{Fraud by transaction type}
+Fraud occurs \textbf{only} in \texttt{TRANSFER} and \texttt{CASH\_OUT}
+(Table~\ref{tab:bytype}). This is a key finding: we can pre-filter by
+transaction type to raise the positive density.
+
+\begin{table}[H]
+\centering
+\caption{Fraud distribution by transaction type.}
+\label{tab:bytype}
+\begin{tabular}{lrrr}
+\toprule
+Type & \# Fraud & Fraud rate & \# Transactions \\
+\midrule
+CASH\_OUT & 4{,}116 & 0.184\% & 2{,}237{,}500 \\
+TRANSFER  & 4{,}097 & 0.769\% & 532{,}909 \\
+CASH\_IN  & 0       & 0\%     & 1{,}399{,}284 \\
+PAYMENT   & 0       & 0\%     & 2{,}151{,}495 \\
+DEBIT     & 0       & 0\%     & 41{,}432 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Balance features}
+Many fraudulent transactions drain the origin account. We build two
+\emph{balance-error} features to capture this anomaly:
+\begin{align}
+\texttt{errorBalanceOrig} &= \texttt{newbalanceOrig} + \texttt{amount} - \texttt{oldbalanceOrg}, \label{eq:errOrig}\\
+\texttt{errorBalanceDest} &= \texttt{oldbalanceDest} + \texttt{amount} - \texttt{newbalanceDest}. \label{eq:errDest}
+\end{align}
+These separate fraud from legitimate transactions very well and later
+dominate the model's feature importance
+(Section~\ref{subsec:importance}).
+
+\subsection{Fraud patterns in synthetic signals}
+The fraud rate spikes when risk flags equal 1 (new device, address
+mismatch, IP mismatch), and \texttt{account\_age\_days} /
+\texttt{ip\_billing\_distance\_km} separate clearly by label ---
+exactly as designed in Section~\ref{sec:data} (hence the leakage
+caveat). In contrast, \texttt{hour\_of\_day} is derived from
+\texttt{step} and reflects a \emph{genuine} temporal pattern of PaySim,
+with no leakage.
+
+% =========================
+\section{Data Cleaning (Module 3)}
+\label{sec:clean}
+
+We clean the data under a \emph{before/after documentation} principle,
+recording the number of fraud rows removed at every step
+(Table~\ref{tab:cleanlog}).
+
+\begin{table}[H]
+\centering
+\caption{Data-cleaning log.}
+\label{tab:cleanlog}
+\begin{tabular}{lrr}
+\toprule
+Step & Rows removed & Fraud removed \\
+\midrule
+Duplicate records (by original columns)             & 0  & 0 \\
+Invalid values (\texttt{amount}$\le$0 / negative balance) & 16 & 16 \\
+\texttt{amount} outliers (KEPT, not clipped)        & 0  & 0 \\
+\midrule
+\textbf{Total} (6{,}362{,}620 $\to$ 6{,}362{,}604)  & \textbf{16} & \textbf{16} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Documented decisions.}
+\begin{itemize}
+    \item \textbf{No missing values or duplicates} --- PaySim is
+    simulated, high-quality data.
+    \item \textbf{Outliers in \texttt{amount} are kept.} The high-value
+    group ($5.31\%$ of the data under the $1.5\times$IQR rule) has a
+    \emph{fraud density of $1.14\%$} --- about $8.8\times$ the global
+    rate ($0.129\%$). Clipping the tail would delete rare positives;
+    here an ``outlier'' is \emph{signal}, not noise.
+    \item \textbf{Merchant quirk.} Merchant destination accounts
+    (\texttt{nameDest} starting with \texttt{M}, $33.8\%$ of rows)
+    always have zero destination balance by PaySim design, and no fraud
+    targets a merchant. This is a data characteristic, not an error.
+\end{itemize}
+Note: all $16$ removed rows were fraud ($16/8{,}213 \approx 0.19\%$) ---
+a reminder that ``label-blind'' cleaning can still touch the rare class;
+the impact is negligible.
+
+% =========================
+\section{Feature Engineering (Module 4)}
+\label{sec:feat}
+
+\subsection{Type filtering and two feature spaces}
+Based on EDA, we keep only \texttt{TRANSFER} and \texttt{CASH\_OUT},
+yielding $2{,}770{,}393$ samples with a positive density raised to
+$0.296\%$ (from $0.129\%$). To measure the contribution of the synthetic
+data precisely, we build \textbf{two feature spaces}:
+\begin{itemize}
+    \item \textbf{Base} --- original PaySim transaction features plus
+    ``real'' signals derived from the transaction sequence (balance
+    errors, velocity). \emph{No label leakage.}
+    \item \textbf{Full} --- Base $+$ 7 synthetic risk signals.
+\end{itemize}
+Every algorithm is trained on \emph{both} to quantify the uplift from
+source 2 and to interpret it alongside the leakage caveat.
+
+\subsection{Velocity features, encoding, and scaling}
+As required by the project, we add \texttt{txn\_count\_acct} (cumulative
+per-account transaction count, causal) and \texttt{time\_since\_last\_txn}
+(gap to the previous transaction). The \texttt{type} variable is
+binary-encoded as \texttt{type\_TRANSFER}; for Logistic Regression the
+numeric features are standardized with \texttt{StandardScaler}.
+
+\paragraph{Practical observation.} On PaySim, accounts almost never
+repeat: \texttt{txn\_count\_acct} has mean $\approx 1.0$ and
+\texttt{time\_since\_last\_txn} is mostly $-1$. These features are built
+\emph{as required} but carry very little signal (see
+Section~\ref{subsec:importance}); on a real platform with returning
+customers they would matter.
+
+\subsection{Handling class imbalance}
+We address imbalance with \textbf{class weights} in all three models
+(\texttt{class\_weight="balanced"} for Logistic Regression;
+\texttt{scale\_pos\_weight}$\approx$$337$ for XGBoost;
+\texttt{class\_weight="balanced\_subsample"} for Random Forest),
+combined with the type filtering that already raised positive density.
+
+\subsection{Feature selection}
+We rank features by \emph{mutual information} (MI) on a subsample. A
+methodological point: \emph{univariate} MI ranks
+\texttt{errorBalanceOrig} rather low, \textbf{contrary} to its
+dominant importance in tree models --- because its strength lies in
+nonlinear interactions. We therefore \textbf{keep all features} for the
+tree models (no harm) rather than pruning by univariate MI, only noting
+the near-uninformative group (\texttt{newbalanceOrig}).
+
+% =========================
+\section{Model Development and Evaluation (Module 5)}
+\label{sec:model}
+
+\subsection{Setup}
+We split train/test $70/30$, stratified by label (train $1{,}939{,}275$
+samples / $5{,}738$ fraud; test $831{,}118$ / $2{,}459$). We train
+\textbf{three algorithms} $\times$ \textbf{two feature spaces}: Logistic
+Regression, Random Forest, XGBoost. The primary metric is
+\textbf{PR-AUC} (suited to imbalanced data), with ROC-AUC, Recall,
+Precision, and F1 at the default threshold $0.5$.
+
+\subsection{Comparison of results}
+Table~\ref{tab:models} summarizes the 6 models.
+
+\begin{table}[H]
+\centering
+\caption{Comparison of 6 models on the test set ($831{,}118$ samples,
+$2{,}459$ fraud). Threshold $0.5$.}
+\label{tab:models}
+\small
+\begin{tabular}{lccccc}
+\toprule
+Model & PR-AUC & ROC-AUC & Recall & Precision & F1 \\
+\midrule
+LogReg $\cdot$ Base & 0.5932 & 0.9782 & 0.9081 & 0.0433 & 0.0827 \\
+LogReg $\cdot$ Full & 0.9704 & 0.9999 & 0.9947 & 0.3348 & 0.5010 \\
+RandomForest $\cdot$ Base & \textbf{0.9974} & 0.9989 & 0.9967 & 0.9996 & 0.9982 \\
+RandomForest $\cdot$ Full & 0.9996 & 1.0000 & 0.9963 & 1.0000 & 0.9982 \\
+XGBoost $\cdot$ Base & 0.9944 & 0.9991 & 0.9923 & 0.9204 & 0.9550 \\
+XGBoost $\cdot$ Full & \textbf{0.9997} & 1.0000 & 0.9976 & 0.9927 & 0.9951 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Key observations:
+\begin{itemize}
+    \item \textbf{Random Forest $\cdot$ Base is the best honest model}:
+    PR-AUC $0.997$ with only \textbf{1 false positive} out of
+    $828{,}659$ legitimate transactions (8 fraud missed) --- using
+    \emph{no synthetic features at all}.
+    \item \textbf{Synthetic features help the linear model greatly}:
+    Logistic Regression Base reaches only PR-AUC $0.59$ (precision
+    $0.04$, i.e., $48{,}850$ false positives), but Full rises to $0.97$.
+    \item On the Base set, XGBoost already reaches $0.994$ --- nearly as
+    good as Full --- showing that PaySim is almost separable using
+    balance features alone.
+\end{itemize}
+
+\subsection{Feature importance}
+\label{subsec:importance}
+Table~\ref{tab:importance} lists XGBoost-Full importances.
+\texttt{errorBalanceOrig} dominates ($0.537$), matching the EDA; notably
+the synthetic flags have \emph{low} importance and velocity is $0$ ---
+meaning the tree model relies mainly on \emph{real} features, which
+tempers (but does not eliminate) the leakage concern.
+
+\begin{table}[H]
+\centering
+\caption{Feature importance (XGBoost Full, top 10 and tail group).}
+\label{tab:importance}
+\small
+\begin{tabular}{lr@{\hskip 2cm}lr}
+\toprule
+Feature & Importance & Feature & Importance \\
+\midrule
+\texttt{errorBalanceOrig}       & 0.537 & \texttt{amount}                 & 0.013 \\
+\texttt{account\_age\_days}     & 0.157 & \texttt{shipping\_billing\_mism.} & 0.010 \\
+\texttt{newbalanceOrig}         & 0.121 & \texttt{is\_new\_device}        & 0.007 \\
+\texttt{failed\_payment\_attempts} & 0.079 & \texttt{oldbalanceDest}      & 0.002 \\
+\texttt{ip\_billing\_mismatch}  & 0.028 & \texttt{txn\_count\_acct}       & 0.000 \\
+\texttt{type\_TRANSFER}         & 0.016 & \texttt{time\_since\_last\_txn} & 0.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Cost-based metric and operating-threshold selection}
+\label{subsec:cost}
+The default threshold $0.5$ is not business-optimal. We turn the
+Precision/Recall trade-off into \textbf{money}: each missed fraud (FN)
+loses exactly the \emph{transaction amount}; each false alarm (FP) costs
+a fixed friction $C_{FP}=10$. The total cost at threshold $t$ is
+\begin{equation}
+\mathrm{Cost}(t) = \!\!\sum_{i:\, y_i=1,\, \hat p_i < t} \!\! \texttt{amount}_i
+\;+\; C_{FP}\cdot \bigl|\{i:\, y_i=0,\, \hat p_i \ge t\}\bigr|.
+\label{eq:cost}
+\end{equation}
+Sweeping the threshold on XGBoost Base (the honest, deployment-suited
+model) gives an \textbf{optimal threshold $t^{*}=0.21$}
+(Table~\ref{tab:cost}), reducing total cost by $\sim$$16.6\%$ versus
+$0.5$.
+
+\begin{table}[H]
+\centering
+\caption{Operating-threshold comparison (XGBoost Base, test set).}
+\label{tab:cost}
+\begin{tabular}{lrrr}
+\toprule
+Threshold & Total cost & Recall & FP \\
+\midrule
+$0.50$ (default) & 1{,}628{,}601 & 0.992 & 211 \\
+$0.21$ (optimal) & \textbf{1{,}358{,}351} & \textbf{0.997} & 260 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Financial KPI at $t^{*}=0.21$.} The model stops
+$\approx 100\%$ of fraud money ($3.6139$B of $3.6152$B on the test set),
+letting only $\sim$$1.36$M through, with an \textbf{FPR $=0.031\%$}
+($260$ legitimate transactions wrongly blocked) --- a well-balanced
+operating point between loss and friction.
+
+\subsection{Limitations and honest interpretation}
+\label{subsec:limit}
+The near-perfect scores (RF Base PR-AUC $0.997$, 1 FP) should
+\textbf{not} be read as excellent capability, but as a sign that the
+data is \emph{too easy}:
+\begin{itemize}
+    \item PaySim simulates fraud with a \emph{near-deterministic balance
+    signature} (fraud drains the origin account), so all three tree
+    models separate it using real features alone.
+    \item The synthetic features are generated from the label, so the
+    Full set carries \textbf{leakage}; Full's scores should be seen as
+    an \emph{optimistic upper bound}, while the Base set is closer to
+    real-world difficulty.
+\end{itemize}
+We therefore present \emph{both} feature spaces and recommend
+\textbf{Random Forest Base} as the best honest model, and
+\textbf{XGBoost Base} as the deployment choice (compact, fast, no
+leakage).
+
+% =========================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We built an end-to-end fraud-detection pipeline on PaySim combined with
+synthetic data, covering all five modules: business understanding and
+KPIs, EDA, documented cleaning, feature engineering with imbalance
+handling and feature selection, and training/evaluation of six models
+with a cost-based metric. Technically, XGBoost/Random Forest reach
+PR-AUC $>0.99$ and the operating threshold $0.21$ stops nearly all fraud
+money at an FPR of $0.031\%$. Methodologically, the core contribution is
+the \emph{Base-vs-Full comparison design} that exposes the label-leakage
+risk, and the conclusion that near-perfect scores reflect the easiness
+of the data rather than genuine generalization --- a necessary honest
+perspective for reporting.
+
+Future work (Modules 6--8): package the model as an API and review UI,
+monitor data drift, and translate findings into risk-policy
+recommendations.
+
+\end{document}
