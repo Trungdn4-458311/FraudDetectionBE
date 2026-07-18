@@ -20,6 +20,9 @@ env/
 *.toc
 *.lof
 *.lot
+*.nav
+*.snm
+*.vrb
 
 # OS
 .DS_Store
