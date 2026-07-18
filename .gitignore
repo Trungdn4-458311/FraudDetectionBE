@@ -10,6 +10,17 @@ __pycache__/
 venv/
 env/
 
+# LaTeX build artifacts (sinh ra khi biên dịch — giữ lại .tex và .pdf)
+*.aux
+*.log
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+
 # OS
 .DS_Store
 Thumbs.db
