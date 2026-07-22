@@ -1376,10 +1376,19 @@ caller submits only the six raw fields of a single transaction:
     workflow (approve / block) with an action log --- a faithful simulation of
     a fraud-analyst console.
 \end{itemize}
-Both are container-free and deploy to a cloud free tier (Hugging Face Spaces,
-SDK \texttt{streamlit}); the \texttt{deployment/} folder carries the Space
-configuration and a one-command push, and the reproducible environment
-(\texttt{pixi.toml}) exposes \texttt{pixi run api} and \texttt{pixi run app}.
+The reproducible environment (\texttt{pixi.toml}) exposes \texttt{pixi run api}
+and \texttt{pixi run app}, and the \texttt{deployment/} folder is one push from
+Streamlit Community Cloud (\texttt{deployment/DEPLOY.md}).
+
+\paragraph{Live demo.} A working, publicly accessible deployment runs at
+\url{https://namxle-hust.github.io/FraudDetectionBE/}. Because a free host that
+runs a Python server is not guaranteed, we also export the trained tree ensemble
+to a compact JSON and evaluate it \emph{client-side}: the page reconstructs the
+eight features and traverses the 300 boosted trees in the browser, reproducing
+\texttt{predict\_proba} to within $2\times10^{-7}$ and applying the same
+three-tier policy. It is the identical model to the served \texttt{model.joblib}
+(source under \texttt{web/}); the Streamlit review queue and FastAPI scorer in
+\texttt{deployment/} are the full-stack equivalent for a hosted deployment.
 
 % =========================
 \section{Model Monitoring (Module 7)}

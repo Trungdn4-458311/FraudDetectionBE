@@ -34,3 +34,6 @@ monitoring/monitoring_report.html
 # OS
 .DS_Store
 Thumbs.db
+
+# Web demo — generated from deployment/model.joblib
+web/model.json
