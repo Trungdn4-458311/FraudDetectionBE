@@ -40,6 +40,16 @@ streamlit run app.py          # analyst review queue
 
 `README.md` in `deployment/` carries the Hugging Face Spaces YAML header (SDK: streamlit); deploying = pushing that folder to a Space.
 
+## Report & slides (`report/`, `slides/`) — graded deliverables
+
+Two LaTeX documents accompany the notebook. Unlike the notebook (Vietnamese), the **report and slide bodies are in English**; only `slides/speaker-notes.md` (the ~18–20 min presenter script for Modules 1–5) is Vietnamese. So "keep new content Vietnamese" applies to the *notebook*, not these.
+
+- `report/main.tex` → `report/main.pdf` — LaTeX `article`, the full written report.
+- `slides/main.tex` → `slides/main.pdf` — Beamer deck (`aspectratio=169`, `Madrid` theme, HUST-red brand palette defined near the top of the file).
+- Build in either dir with `latexmk -pdf main.tex` (or `pdflatex main.tex` ×2 for cross-refs). Build artifacts (`.aux`, `.log`, `.nav`, …) are git-ignored; commit only `.tex` and `.pdf`.
+
+**Coupling:** a dedicated appendix cell (*"Phụ lục — Xuất hình cho báo cáo LaTeX"*, `FIGDIR = "report/figures"`, `save_fig()`) writes the report's charts straight into `report/figures/*.png` — English-labelled, on purpose. Re-running the notebook regenerates those PNGs, so don't hand-edit them — change the plotting cell and re-run. The report `\includegraphics` these same five files.
+
 ## Core modeling design (the important architecture)
 
 The 9 synthetic features (`is_new_device`, `*_mismatch`, `account_age_days`, …) are **generated conditioned on `isFraud`** (Module 1, cell ~7: `p = where(fraud, ...)`), so using them naively **leaks the label**. The notebook handles this by building two feature spaces and comparing them everywhere:
