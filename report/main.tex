@@ -59,7 +59,7 @@ a platform, this project answers a concrete business question:
 platform balance blocking fraud against approving legitimate orders
 without unnecessary friction?} We combine \textbf{two data sources}: the
 simulated mobile-money dataset \textbf{PaySim} ($6{,}362{,}620$
-transactions, fraud rate $0.129\%$) and \textbf{nine contextual
+transactions, fraud rate $0.129\%$) and \textbf{ten contextual
 features} generated in Python with Faker (account age, new-device flag,
 shipping/billing mismatch, IP-to-billing distance, etc.). The pipeline
 covers exploratory data analysis, documented before/after cleaning,
@@ -69,13 +69,14 @@ Regression, Random Forest, XGBoost) over \textbf{two feature spaces}
 (Base/Full), evaluated with metrics suited to imbalanced data (PR-AUC,
 Recall, $F_1$) plus a \textbf{cost-based metric} used to select an
 operating threshold. A central methodological point drives the design:
-the nine synthetic features are generated \emph{conditioned on the
-label}, which introduces \textbf{label leakage}; rather than ignoring
+the nine synthetic \emph{risk} features (all ten except the EDA-only
+\texttt{channel}) are generated \emph{conditioned on the label}, which
+introduces \textbf{label leakage}; rather than ignoring
 this, we quantify it through a systematic Base-vs-Full comparison. Our
-strongest models reach PR-AUC $>0.99$ (Random Forest Base: $0.9974$
+strongest models reach PR-AUC $>0.99$ (Random Forest Base: $0.9976$
 with a single false positive out of $828{,}659$ legitimate
-transactions), and a cost-optimal threshold of $t^{*}=0.21$ stops
-$\approx$$100\%$ of fraud value at a false-positive rate of $0.031\%$.
+transactions), and a cost-optimal threshold of $t^{*}=0.17$ stops
+$\approx$$100\%$ of fraud value at a false-positive rate of $0.032\%$.
 Critically, we show that these near-perfect scores largely reflect the
 \emph{easiness} of the data---PaySim encodes fraud with a
 near-deterministic balance signature---rather than genuine real-world
@@ -160,8 +161,11 @@ documents cleaning. Section~\ref{sec:feat} (Module~4) covers feature
 engineering, imbalance handling, and feature selection.
 Section~\ref{sec:model} (Module~5) reports modeling results, and
 Section~\ref{sec:cost} the cost-based threshold selection.
-Section~\ref{sec:discussion} discusses limitations, and
-Section~\ref{sec:conclusion} concludes.
+Section~\ref{sec:deployment} (Module~6) describes the deployed API and
+review queue, Section~\ref{sec:monitoring} (Module~7) the drift and
+performance monitoring, and Section~\ref{sec:riskpolicy} (Module~8) the
+three-tier risk policy. Section~\ref{sec:discussion} discusses
+limitations, and Section~\ref{sec:conclusion} concludes.
 
 % =========================
 \section{Problem Formulation}
@@ -253,7 +257,7 @@ Section~\ref{subsec:balance} capture almost deterministically.
 
 \subsection{Source 2 --- synthetic contextual features}
 The project requires supplementing the base data with contextual and
-behavioural attributes generated in Python. We produce nine fields with
+behavioural attributes generated in Python. We produce ten fields with
 the Faker library plus custom business logic, using a fixed seed
 (\texttt{SEED = 42}) for reproducibility. Generation proceeds at two
 levels:
@@ -267,7 +271,9 @@ levels:
     \item \textbf{Transaction level}: \texttt{hour\_of\_day},
     \texttt{shipping\_billing\_mismatch}, \texttt{is\_new\_device},
     \texttt{failed\_payment\_attempts}, \texttt{ip\_billing\_mismatch},
-    \texttt{ip\_billing\_distance\_km}. These are drawn per row.
+    \texttt{ip\_billing\_distance\_km}, and \texttt{channel} (an
+    access-channel dimension used for EDA only, kept out of the models).
+    These are drawn per row.
 \end{itemize}
 
 To make the synthetic signal realistic rather than pure noise, the
@@ -299,7 +305,7 @@ project brief. The dictionary is exported programmatically to
 
 \begin{table}[H]
 \centering
-\caption{Data dictionary of the nine synthetic features (source 2).}
+\caption{Data dictionary of the ten synthetic features (source 2).}
 \label{tab:datadict}
 \footnotesize
 \begin{tabular}{lllp{5.2cm}}
@@ -315,6 +321,7 @@ Field & Type / Unit & Valid range & Generation logic \\
 \texttt{failed\_payment\_attempts}   & int16 / count & $\ge 0$ & Poisson $\lambda{=}2.2$ (fraud) / $0.12$ \\
 \texttt{ip\_billing\_mismatch}       & int8 (0/1)    & $\{0,1\}$ & Bernoulli $p{=}0.50$ (fraud) / $0.02$ \\
 \texttt{ip\_billing\_distance\_km}   & float / km    & $0$--$8000$ & Uniform(500,8000) if mismatch, else (0,80) \\
+\texttt{channel}                     & category      & \{web, mobile, POS, api\} & Label-tilted draw; EDA-only, not a model feature \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -374,7 +381,7 @@ feature space} and measuring the difference
 
 \subsection{Data quality overview}
 The dataset is exceptionally clean: \textbf{zero missing values} across
-all $20$ columns (11 original $+$ 9 synthetic) and \textbf{zero fully
+all $21$ columns (11 original $+$ 10 synthetic) and \textbf{zero fully
 duplicated rows}. Descriptive statistics
 (Table~\ref{tab:describe}) reveal heavy right skew in every monetary
 column---the mean \texttt{amount} is $179{,}862$ but the maximum is
@@ -1057,10 +1064,10 @@ Model & PR-AUC & ROC-AUC & Recall & Precision & $F_1$ \\
 \midrule
 LogReg $\cdot$ Base       & 0.5932 & 0.9782 & 0.9081 & 0.0433 & 0.0827 \\
 LogReg $\cdot$ Full       & 0.9704 & 0.9999 & 0.9947 & 0.3348 & 0.5010 \\
-RandomForest $\cdot$ Base & 0.9974 & 0.9989 & 0.9967 & 0.9996 & 0.9982 \\
-RandomForest $\cdot$ Full & 0.9996 & \textbf{1.0000} & 0.9963 & \textbf{1.0000} & 0.9982 \\
-XGBoost $\cdot$ Base      & 0.9944 & 0.9991 & 0.9923 & 0.9204 & 0.9550 \\
-XGBoost $\cdot$ Full      & \textbf{0.9997} & \textbf{1.0000} & \textbf{0.9976} & 0.9927 & \textbf{0.9951} \\
+RandomForest $\cdot$ Base & 0.9976 & 0.9989 & 0.9967 & 0.9996 & \textbf{0.9982} \\
+RandomForest $\cdot$ Full & \textbf{0.9997} & \textbf{1.0000} & 0.9963 & \textbf{1.0000} & \textbf{0.9982} \\
+XGBoost $\cdot$ Base      & 0.9944 & 0.9989 & 0.9931 & 0.9222 & 0.9564 \\
+XGBoost $\cdot$ Full      & 0.9996 & \textbf{1.0000} & \textbf{0.9984} & 0.9923 & 0.9953 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1104,8 +1111,8 @@ LogReg $\cdot$ Base       & 779{,}372 & 49{,}287 & 226 & 2{,}233 \\
 LogReg $\cdot$ Full       & 823{,}799 & 4{,}860  & 13  & 2{,}446 \\
 RandomForest $\cdot$ Base & 828{,}658 & \textbf{1} & 8 & 2{,}451 \\
 RandomForest $\cdot$ Full & 828{,}659 & \textbf{0} & 9 & 2{,}450 \\
-XGBoost $\cdot$ Base      & 828{,}448 & 211 & 19 & 2{,}440 \\
-XGBoost $\cdot$ Full      & 828{,}641 & 18  & \textbf{6} & 2{,}453 \\
+XGBoost $\cdot$ Base      & 828{,}453 & 206 & 17 & 2{,}442 \\
+XGBoost $\cdot$ Full      & 828{,}640 & 19  & \textbf{4} & 2{,}455 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1135,9 +1142,9 @@ threshold across the board. This is exactly the diagnostic value of
 including a linear baseline.
 
 \paragraph{Why Random Forest edges out XGBoost.} On the Base space,
-Random Forest attains PR-AUC $0.9974$ versus XGBoost's $0.9944$, yet
+Random Forest attains PR-AUC $0.9976$ versus XGBoost's $0.9944$, yet
 the gap in \emph{precision at $t = 0.5$} is far larger ($0.9996$ vs
-$0.9204$; $1$ vs $211$ false positives). The discrepancy between a
+$0.9222$; $1$ vs $206$ false positives). The discrepancy between a
 small ranking gap and a large threshold gap identifies the cause as
 \textbf{calibration, not ranking ability}. XGBoost multiplies every
 positive gradient by $\approx 337$
@@ -1168,8 +1175,8 @@ features.
 Algorithm & Base & Full & Uplift \\
 \midrule
 Logistic Regression & 0.5932 & 0.9704 & $+0.3772$ \\
-Random Forest       & 0.9974 & 0.9996 & $+0.0022$ \\
-XGBoost             & 0.9944 & 0.9997 & $+0.0053$ \\
+Random Forest       & 0.9976 & 0.9997 & $+0.0021$ \\
+XGBoost             & 0.9944 & 0.9996 & $+0.0052$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1258,9 +1265,9 @@ We apply the analysis to \textbf{XGBoost Base}---the honest,
 deployment-suited model (Section~\ref{subsec:recommendation}).
 
 \subsection{Results}
-The cost curve attains its minimum at $t^{*} = 0.21$, well below the
-default (Table~\ref{tab:cost}). Moving from $0.5$ to $0.21$ reduces
-total cost by $16.6\%$.
+The cost curve attains its minimum at $t^{*} = 0.17$, well below the
+default (Table~\ref{tab:cost}). Moving from $0.5$ to $0.17$ reduces
+total cost by $14.7\%$.
 
 \begin{table}[H]
 \centering
@@ -1270,10 +1277,10 @@ total cost by $16.6\%$.
 \toprule
 Threshold & Total cost & Recall & Precision & FP \\
 \midrule
-$0.50$ (default) & 1{,}628{,}601 & 0.992 & 0.920 & 211 \\
-$0.21$ (optimal) & \textbf{1{,}358{,}351} & \textbf{0.997} & 0.904 & 260 \\
+$0.50$ (default) & 1{,}591{,}668 & 0.993 & 0.922 & 206 \\
+$0.17$ (optimal) & \textbf{1{,}358{,}401} & \textbf{0.997} & 0.902 & 265 \\
 \midrule
-Change & $-16.6\%$ & $+0.005$ & $-0.016$ & $+49$ \\
+Change & $-14.7\%$ & $+0.004$ & $-0.020$ & $+59$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1283,7 +1290,7 @@ Change & $-16.6\%$ & $+0.005$ & $-0.016$ & $+49$ \\
 \includegraphics[width=0.85\textwidth]{figures/cost_threshold.png}
 \caption{Total cost as a function of the decision threshold
 (Eq.~\ref{eq:cost}, XGBoost Base). The dashed line marks the
-cost-optimal $t^{*} = 0.21$; the dotted line the default $0.5$. Note
+cost-optimal $t^{*} = 0.17$; the dotted line the default $0.5$. Note
 that the curve is essentially \emph{flat} below $t \approx 0.25$ and
 then rises steeply: the optimum is a broad plateau rather than a sharp
 point, which is the graphical counterpart of the insensitivity to
@@ -1301,9 +1308,9 @@ justifies thousands of extra reviews---the optimizer is simply
 following that arithmetic.
 
 \subsection{Financial KPI}
-At $t^{*} = 0.21$ the model achieves the business outcome in
+At $t^{*} = 0.17$ the model achieves the business outcome in
 Table~\ref{tab:kpi}: it stops $99.96\%$ of fraud value while blocking
-only $0.031\%$ of legitimate customers.
+only $0.032\%$ of legitimate customers.
 
 \begin{table}[H]
 \centering
@@ -1316,7 +1323,7 @@ Indicator & Value \\
 Fraud value at risk (baseline)      & 3{,}615{,}247{,}576 \\
 Fraud value stopped (loss avoided)  & \textbf{3{,}613{,}891{,}825} \;($99.96\%$) \\
 Fraud value leaked                  & 1{,}355{,}751 \\
-False-positive rate (FPR)           & \textbf{0.031\%} (260 transactions) \\
+False-positive rate (FPR)           & \textbf{0.032\%} (265 transactions) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1336,11 +1343,159 @@ following a wrongful block; we flag this as the single most important
 assumption to validate.
 
 % =========================
+\section{Deployment (Module 6)}
+\label{sec:deployment}
+
+The deployed artifact is an XGBoost \emph{retrained on the eight
+features available at scoring time} (\texttt{amount}, the four balance
+columns, \texttt{errorBalanceOrig}, \texttt{errorBalanceDest} and
+\texttt{type\_TRANSFER}). It drops \texttt{step} and the velocity/recency
+features, which need account history a real-time endpoint does not have and
+which carry no signal on PaySim anyway (Section~\ref{sec:feat} discusses
+this honest negative result). Because it is a \emph{different} model from the
+eleven-feature analysis XGBoost Base of Section~\ref{sec:model}, it has its
+\emph{own} cost-optimal threshold --- $\approx 0.09$ on the test set, recomputed
+by the same cost rule (Section~\ref{sec:cost}) --- which is what the served
+system actually uses, not the analysis model's $0.17$. The bundle
+\texttt{deployment/model.joblib} ---\{model, features, threshold,
+block\_threshold, model\_name\}--- is exported directly by the notebook, so
+the served model is exactly what the notebook produces (no hand-editing), and
+\texttt{scoring.py} reads its threshold back at load time.
+
+Two services share one scoring core (\texttt{deployment/scoring.py}), whose
+\texttt{featurize()} reconstructs \texttt{errorBalanceOrig},
+\texttt{errorBalanceDest} and \texttt{type\_TRANSFER} on the server, so a
+caller submits only the six raw fields of a single transaction:
+\begin{itemize}
+    \item \textbf{REST API} (\texttt{api.py}, FastAPI): \texttt{POST /predict}
+    scores one transaction in real time and returns the fraud probability plus
+    a policy decision; \texttt{GET /health} reports model metadata; interactive
+    documentation is served at \texttt{/docs}.
+    \item \textbf{Analyst review queue} (\texttt{app.py}, Streamlit): scores a
+    batch, ranks it high-to-low risk, and offers a per-transaction triage
+    workflow (approve / block) with an action log --- a faithful simulation of
+    a fraud-analyst console.
+\end{itemize}
+Both are container-free and deploy to a cloud free tier (Hugging Face Spaces,
+SDK \texttt{streamlit}); the \texttt{deployment/} folder carries the Space
+configuration and a one-command push, and the reproducible environment
+(\texttt{pixi.toml}) exposes \texttt{pixi run api} and \texttt{pixi run app}.
+
+% =========================
+\section{Model Monitoring (Module 7)}
+\label{sec:monitoring}
+
+A deployed fraud model degrades as the transaction stream evolves, so we add a
+monitoring component that tracks distributional drift and performance over time
+and codifies when to retrain. The logic is a small, dependency-light library
+(\texttt{monitoring/monitoring\_core.py}) --- our own implementation of what a
+tool such as Evidently provides --- reused by both a notebook section
+(Module~7) and a standalone builder
+(\texttt{monitoring/build\_monitoring.py} $\rightarrow$
+\texttt{monitoring\_report.html}). Because PaySim carries a single time axis,
+we simulate an incoming stream by splitting \texttt{step} into an early
+\emph{reference} window and a late \emph{current} window.
+
+\subsection{Data drift}
+For each of the eight served features we compute the Population Stability Index
+(PSI, over reference deciles) and the Kolmogorov--Smirnov statistic. A feature is
+flagged when $\text{PSI} > 0.2$ or the KS \emph{statistic} exceeds $0.1$. We key
+the flag on the statistic, not its p-value, on purpose: at these sample sizes
+(hundreds of thousands of transactions) the KS p-value rejects equality on any
+negligible difference and would flag every feature, so an effect-size rule is the
+honest choice (Figure~\ref{fig:mon-drift}).
+
+\subsection{Performance over time}
+The scored stream is bucketed into twelve equal-width time windows; precision,
+recall and PR-AUC are recomputed per window against the fixed operating
+threshold, exposing decay that a single held-out score would hide
+(Figure~\ref{fig:mon-perf}).
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.92\textwidth]{figures/monitoring_drift.png}
+\caption{Per-feature drift: PSI by served feature (red = flagged) and the
+reference-versus-current distribution of the most-shifted feature.}
+\label{fig:mon-drift}
+\end{figure}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.92\textwidth]{figures/monitoring_performance.png}
+\caption{Rolling precision/recall and rolling PR-AUC/volume across time
+windows, with the retraining floors marked.}
+\label{fig:mon-perf}
+\end{figure}
+
+\subsection{Retraining triggers}
+Retraining is queued when \emph{any} condition in Table~\ref{tab:triggers}
+fires. A stress test (injecting a $2.5\times$ amount shift into the current
+window) confirms the triggers respond when drift is genuinely present.
+
+\begin{table}[H]\centering
+\begin{tabular}{lll}
+\toprule
+Signal & Threshold & Meaning \\
+\midrule
+Max PSI & $> 0.20$ & a served feature shifted materially \\
+Drift breadth & $\ge 2$ features flagged & drift is widespread, not noise \\
+Rolling recall & $< 0.90$ & too much fraud missed \\
+Rolling precision & $< 0.20$ & too many false alarms \\
+PR-AUC decay & $> 0.10$ below reference & ranking power eroded \\
+\bottomrule
+\end{tabular}
+\caption{Retraining triggers (\texttt{DEFAULT\_TRIGGERS} in
+\texttt{monitoring\_core.py}).}
+\label{tab:triggers}
+\end{table}
+
+In operation, scored transactions and their eventual labels are logged, the
+report is regenerated on a schedule (\texttt{pixi run monitor}), and an alert
+fires when \texttt{retrain\_recommended} is true.
+
+% =========================
+\section{Risk-Policy Recommendations (Module 8)}
+\label{sec:riskpolicy}
+
+A single fraud/not-fraud threshold forces every flagged transaction into one
+action. In practice the platform must balance \emph{blocking fraud} against
+\emph{customer friction}, which calls for graded actions. We therefore
+translate the model score into a three-tier policy
+(Table~\ref{tab:riskpolicy}), implemented in \texttt{deployment/scoring.py}.
+
+\begin{table}[H]\centering
+\begin{tabular}{p{2.4cm}p{2.2cm}p{3.0cm}p{4.6cm}}
+\toprule
+Score band & Tier & Action & Rationale \\
+\midrule
+$p < t^{*}$ & auto-approve & clear immediately & below the cost-optimal cutoff \\
+$t^{*} \le p < b$ & manual-review & analyst queue & uncertain; avoid a wrongful block \\
+$p \ge b$ & auto-block & block immediately & near-certain fraud \\
+\bottomrule
+\end{tabular}
+\caption{Three-tier risk policy. $t^{*}$ is the \emph{deployed} model's
+cost-optimal threshold ($\approx 0.09$, read from \texttt{model.joblib} --- see
+Section~\ref{sec:deployment}), applied by \texttt{scoring.py}; $b$ is the
+auto-block threshold, calibrated as the smallest score at which held-out
+precision reaches $0.99$ ($\approx 0.80$).}
+\label{tab:riskpolicy}
+\end{table}
+
+The auto-block boundary $b$ is chosen from data rather than assumed: we take the
+lowest score at which precision on the held-out set reaches $0.99$, so automatic
+blocks are near-certain while the ambiguous middle band is routed to a human
+rather than actioned automatically. Because a high score is driven by the
+balance-error footprint (\texttt{errorBalanceOrig},
+Eq.~\ref{eq:errOrig}), the policy reads naturally: a transaction whose origin
+balance fails to reconcile by the transferred amount is what escalates it. The
+tiers are surfaced by the API
+(\texttt{decision} $\in \{$APPROVE, REVIEW, BLOCK$\}$) and colour-coded in the
+analyst queue.
+
+% =========================
 \section{Discussion}
 \label{sec:discussion}
 
 \subsection{Why the scores are near-perfect}
-Random Forest Base attains PR-AUC $0.9974$ with one false positive in
+Random Forest Base attains PR-AUC $0.9976$ with one false positive in
 $828{,}659$ legitimate transactions. In real fraud detection such
 numbers would be implausible, and intellectual honesty requires
 explaining rather than celebrating them. The explanation is the data,
@@ -1399,7 +1554,7 @@ We separate the \emph{best} model from the \emph{deployed} model, a
 standard and defensible distinction:
 \begin{itemize}
     \item \textbf{Random Forest Base} is the best honest performer
-    (PR-AUC $0.9974$, one false positive, no leakage) and is what we
+    (PR-AUC $0.9976$, one false positive, no leakage) and is what we
     report as the headline result.
     \item \textbf{XGBoost Base} is our deployment recommendation. It is
     statistically indistinguishable in practical terms
@@ -1429,15 +1584,19 @@ at \url{https://github.com/Trungdn4-458311/FraudDetectionBE}.
 \label{sec:conclusion}
 
 We built an end-to-end fraud-detection pipeline on PaySim combined with
-a synthetic contextual feed, covering all five modules: business
+a synthetic contextual feed, covering all eight modules: business
 understanding and KPI definition, exploratory analysis, documented
 cleaning, feature engineering with imbalance handling and feature
-selection, and the training and evaluation of six models under a
-cost-based operating criterion.
+selection, the training and evaluation of six models under a
+cost-based operating criterion, a real-time API with an analyst
+review-queue interface (Section~\ref{sec:deployment}), a drift and
+performance monitoring component with retraining triggers
+(Section~\ref{sec:monitoring}), and a three-tier risk policy
+(Section~\ref{sec:riskpolicy}).
 
 Technically, the tree ensembles reach PR-AUC $>0.99$, and the
-cost-optimal threshold $t^{*} = 0.21$ stops $99.96\%$ of fraud value at
-a false-positive rate of $0.031\%$---a $16.6\%$ cost reduction over the
+cost-optimal threshold $t^{*} = 0.17$ stops $99.96\%$ of fraud value at
+a false-positive rate of $0.032\%$---a $14.7\%$ cost reduction over the
 default threshold and a decisive improvement over the incumbent
 rule-based control.
 
@@ -1451,14 +1610,14 @@ near-deterministic balance signature captured by
 no synthetic features at all. We regard this diagnosis, rather than the
 headline metric, as the substantive result.
 
-\paragraph{Future work.} Three directions follow naturally.
-\emph{(i)~Deployment (Module~6):} package the model as a real-time API
-with an analyst review-queue interface.
-\emph{(ii)~Monitoring (Module~7):} track data drift against the
-training distribution and define retraining triggers.
-\emph{(iii)~Methodological hardening:} adopt a temporal split, add
-cross-validation with variance reporting, calibrate $C_{FP}$ from real
-operational costs, and validate the pipeline on a genuine transaction
-dataset where the balance signature is not near-deterministic.
+\paragraph{Future work.} Deployment (Module~6), monitoring (Module~7)
+and the risk policy (Module~8) described above are now implemented; the
+remaining direction is \emph{methodological hardening}: adopt a temporal
+split, add cross-validation with variance reporting, calibrate $C_{FP}$
+from real operational costs, and validate the pipeline on a genuine
+transaction dataset where the balance signature is not
+near-deterministic. Extending the served feature set with behavioural
+signals that are meaningful on real (recurring-account) data would also
+let the velocity/recency features finally contribute.
 
 \end{document}

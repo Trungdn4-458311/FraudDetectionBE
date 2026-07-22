@@ -1,6 +1,6 @@
 # FraudDetectionBE — Real-Time Payment Fraud Detection
 
-Đồ án Business Analytics: phát hiện gian lận giao dịch thanh toán end-to-end trên dữ liệu **PaySim**, kết hợp đặc trưng ngữ cảnh sinh bằng Faker. Toàn bộ phân tích nằm trong [`fraud_eda.ipynb`](fraud_eda.ipynb) (Module 1–6: Business Understanding → EDA → Cleaning → Feature Engineering → Modeling → Deployment).
+Đồ án Business Analytics: phát hiện gian lận giao dịch thanh toán end-to-end trên dữ liệu **PaySim**, kết hợp đặc trưng ngữ cảnh sinh bằng Faker. Toàn bộ phân tích nằm trong [`fraud_eda.ipynb`](fraud_eda.ipynb) (Module 1–7: Business Understanding → EDA → Cleaning → Feature Engineering → Modeling → Deployment → Monitoring). Môi trường tái lập bằng **pixi** (`pixi run notebook/monitor/api/app/test`); build báo cáo/slide bằng docker TeX Live (`Makefile`).
 
 ## Dữ liệu (bắt buộc tải trước khi chạy)
 

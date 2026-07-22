@@ -1,0 +1,63 @@
+[workspace]
+name = "fraud-detection"
+version = "0.1.0"
+description = "Real-time payment fraud detection on PaySim — reproducible environment (no manual installs)."
+authors = ["FraudDetection team"]
+channels = ["conda-forge"]
+platforms = ["linux-aarch64", "osx-arm64", "linux-64"]
+
+# ----------------------------------------------------------------------
+# Reproducible env. Run everything through pixi; nothing installs globally.
+#   pixi install                 # materialise the environment
+#   pixi run notebook            # Restart & Run All (headless, in place)
+#   pixi run monitor             # build the Module 7 monitoring report
+#   pixi run api                 # serve the FastAPI scorer
+#   pixi run app                 # launch the Streamlit review queue
+#   pixi run slides-to-pptx      # convert the compiled slides PDF -> PPTX
+# LaTeX (report/slides PDF) builds run in docker `texlive/texlive` — see Makefile / DEPLOY notes.
+# ----------------------------------------------------------------------
+
+[dependencies]
+python = "3.11.*"
+pandas = "*"
+numpy = "*"
+scipy = "*"
+scikit-learn = "*"
+xgboost = "*"
+joblib = "*"
+matplotlib = "*"
+seaborn = "*"
+faker = "*"
+openpyxl = "*"
+pyarrow = "*"
+tabulate = "*"
+# notebook execution
+jupyter = "*"
+nbconvert = "*"
+nbformat = "*"
+ipykernel = "*"
+# deployment
+fastapi = "*"
+uvicorn = "*"
+streamlit = "*"
+pydantic = "*"
+# slides PDF -> PPTX conversion (self-contained, no LibreOffice needed)
+python-pptx = "*"
+# tests
+pytest = "*"
+httpx = "*"
+
+[pypi-dependencies]
+# PyMuPDF ships manylinux/macos wheels on PyPI (not on conda-forge for all platforms)
+pymupdf = "*"
+
+[tasks]
+notebook = "jupyter nbconvert --to notebook --execute --inplace fraud_eda.ipynb --ExecutePreprocessor.timeout=3600"
+monitor = "python monitoring/build_monitoring.py"
+api = "uvicorn api:app --host 0.0.0.0 --port 8000 --app-dir deployment"
+app = "streamlit run deployment/app.py"
+slides-to-pptx = "python slides/pdf_to_pptx.py slides/main.pdf slides/main.pptx"
+test = "pytest"
+
+# LaTeX (report/slides PDF) builds run in a full TeX Live docker image — see Makefile
+# (`make report` / `make slides`), which is registry-independent (uses ghcr.io).

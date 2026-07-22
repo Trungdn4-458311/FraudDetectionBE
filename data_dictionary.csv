@@ -8,3 +8,4 @@ is_new_device,int8 (0/1),cờ nhị phân,"{0, 1}","Giao dịch từ thiết b�
 failed_payment_attempts,int16,lần,>= 0 (thực tế 0–~10),"Số lần thanh toán thất bại trước khi thành công; Poisson(λ=2.2) nếu gian lận, Poisson(λ=0.12) nếu hợp lệ."
 ip_billing_mismatch,int8 (0/1),cờ nhị phân,"{0, 1}","IP khác quốc gia thanh toán; Bernoulli p=0.50 nếu gian lận, p=0.02 nếu hợp lệ."
 ip_billing_distance_km,float64,km,0–8000,"Khoảng cách IP tới nước thanh toán; Uniform(500, 8000) nếu ip_billing_mismatch=1, ngược lại Uniform(0, 80)."
+channel,category/str,-,"{web, mobile, POS, api}","Kênh giao dịch (contextual, CHỈ dùng cho EDA). Phân phối phụ thuộc nhẹ nhãn: gian lận thiên về web/api, hợp lệ thiên về mobile."

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A university **Business Analytics group project**: end-to-end payment fraud detection on the **PaySim** dataset (~6.36M mobile-money transactions) plus 9 synthetically-generated contextual features (Faker). The primary artifact is a single Jupyter notebook, `fraud_eda.ipynb`, structured as Modules 1–6 (Business Understanding → EDA → Cleaning → Feature Engineering → Modeling → Deployment). Notebook prose, comments, and print output are in **Vietnamese** — keep new content Vietnamese to match.
+A university **Business Analytics group project**: end-to-end payment fraud detection on the **PaySim** dataset (~6.36M mobile-money transactions) plus 10 synthetically-generated contextual features (Faker; the 10th, `channel`, is EDA-only and kept out of the models). The primary artifact is a single Jupyter notebook, `fraud_eda.ipynb`, structured as Modules 1–7 (Business Understanding → EDA → Cleaning → Feature Engineering → Modeling → Deployment → Monitoring), plus a figure-export appendix. Notebook prose, comments, and print output are in **Vietnamese** — keep new content Vietnamese to match.
+
+Reproducible env is **pixi** (`pixi.toml`; `pixi run notebook/monitor/api/app/test/slides-to-pptx`); LaTeX builds run in a docker TeX Live image (`Makefile`). The `monitoring/` package (drift/PSI/KS + rolling metrics + retraining triggers) backs Module 7 and a standalone HTML dashboard (`pixi run monitor`).
 
 Grading rewards *rigor and honest interpretation* over raw accuracy; academic rules require code to be authored by the team, so **do not add AI co-author trailers to commits**.
 
@@ -48,7 +50,7 @@ Two LaTeX documents accompany the notebook. Unlike the notebook (Vietnamese), th
 - `slides/main.tex` → `slides/main.pdf` — Beamer deck (`aspectratio=169`, `Madrid` theme, HUST-red brand palette defined near the top of the file).
 - Build in either dir with `latexmk -pdf main.tex` (or `pdflatex main.tex` ×2 for cross-refs). Build artifacts (`.aux`, `.log`, `.nav`, …) are git-ignored; commit only `.tex` and `.pdf`.
 
-**Coupling:** a dedicated appendix cell (*"Phụ lục — Xuất hình cho báo cáo LaTeX"*, `FIGDIR = "report/figures"`, `save_fig()`) writes the report's charts straight into `report/figures/*.png` — English-labelled, on purpose. Re-running the notebook regenerates those PNGs, so don't hand-edit them — change the plotting cell and re-run. The report `\includegraphics` these same five files.
+**Coupling:** a dedicated appendix cell (*"Phụ lục — Xuất hình cho báo cáo LaTeX"*, `FIGDIR = "report/figures"`, `save_fig()`) writes five English-labelled charts straight into `report/figures/*.png`; the Module 7 cells write two more (`monitoring_drift.png`, `monitoring_performance.png`). Re-running the notebook regenerates all seven, so don't hand-edit them — change the plotting cell and re-run. The report `\includegraphics` these same seven files. **The report/slides body text also hard-codes numbers from the notebook (t\*, cost table, FPR) — after any modeling change, re-run the notebook and reconcile those numbers, or the figure (e.g. cost_threshold.png) will visibly contradict the prose.**
 
 ## Core modeling design (the important architecture)
 
@@ -61,8 +63,9 @@ Every algorithm is trained on both; Module 5.3 discusses the leakage and frames 
 Facts worth keeping consistent when writing/reporting:
 - Fraud only occurs in `TRANSFER` and `CASH_OUT`; Module 4 filters to these (positive rate rises 0.129% → 0.296%).
 - Near-perfect scores (e.g. RandomForest Base PR-AUC 0.997, 1 false positive) reflect PaySim being *nearly separable by design*, not model brilliance — always report this as a limitation.
-- **RandomForest Base** is the best honest model on metrics; **XGBoost Base** is what gets deployed (compact, fast, no leakage). Class imbalance is handled with class weights / `scale_pos_weight` (not resampling). The operating threshold (~0.21) is chosen by minimizing a cost metric (missed-fraud amount + `COST_FP=10` per false alarm) in Module 5.4.
+- **RandomForest Base** is the best honest model on metrics; **XGBoost Base** is what gets deployed (compact, fast, no leakage). Class imbalance is handled with class weights / `scale_pos_weight` (not resampling). The Module 5.4 cost-optimal threshold for the analysis model is **~0.17** (minimizing missed-fraud amount + `COST_FP=10` per false alarm); the **deployed 8-feature model is retrained separately and has its own threshold (~0.09)** stored in `model.joblib` — these are different models, don't conflate their thresholds.
+- Risk policy is 3-tier: below `threshold` → auto-approve, `[threshold, block_threshold)` → manual-review, `≥ block_threshold` (~0.80, calibrated to test precision ≥ 0.99) → auto-block (`deployment/scoring.py`).
 
 ## Verification
 
-There is no test suite. Changes are verified with throwaway scripts that build a small synthetic DataFrame with the same columns and either `exec()` the relevant saved cell sources or replicate their logic — substituting a scikit-learn stand-in for `XGBClassifier` when `xgboost` is absent. Prefer this over running the full notebook when checking that edited cells are syntactically and logically sound.
+There **is** a committed pytest suite (`tests/`, run with `pixi run test`): `test_scoring.py` (featurize + 3-tier decide), `test_monitoring_core.py` (PSI/drift/rolling/triggers, incl. the effect-size-not-p-value rule), `test_api.py` (FastAPI TestClient), `test_build_monitoring.py`, `test_pdf_to_pptx.py`. Tests use a scikit-learn stand-in model via `MODEL_PATH` (see `tests/conftest.py`), so they don't need the trained bundle or the 493 MB dataset, and are hermetic (never write into deliverable paths). For quick checks of edited notebook cells, still prefer syntax/`nbformat.validate` + small synthetic DataFrames over a full 3-min notebook run.
