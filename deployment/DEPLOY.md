@@ -1,9 +1,40 @@
-# Deploy the live demo — end-to-end guide (Hugging Face Spaces, free tier)
+# Deploy the live demo — end-to-end guide
 
-The rubric requires a **live, accessible link** to the deployed API + review-queue demo.
-This walks you through it from zero. Two routes: **A) web UI (easiest)** and
-**B) git/CLI (reproducible, scriptable)**. Both give a public URL like
-`https://huggingface.co/spaces/<user>/fraud-detection-demo`.
+The rubric requires a **live, accessible link** to the deployed review-queue demo.
+
+> **Which host?** As of 2026, **Hugging Face's free tier only hosts _static_ Spaces** —
+> running-app Spaces (Gradio/Docker; Streamlit is no longer a selectable SDK) require a
+> **PRO** subscription. So on a free HF account this Streamlit app **cannot** run there.
+> **Use [Streamlit Community Cloud](https://share.streamlit.io) instead — it is free and
+> purpose-built for this app (Route 0 below).** The HF routes (A/B) are kept for anyone
+> with HF PRO.
+
+---
+
+## Route 0 — Streamlit Community Cloud (free, recommended)
+
+Streamlit Cloud deploys straight from a GitHub repo — no token, no Docker.
+
+**Prerequisite:** the code must be on a GitHub repo you can access. The project's current
+remote (`Trungdn4-458311/FraudDetectionBE`) is a teammate's; if you can't push to it, either
+have the owner push the latest commit, or fork it / create your own repo and push there.
+`deployment/model.joblib` is committed (≈0.8 MB, well under GitHub's limit), so it ships with the code.
+
+1. Push the project to GitHub (the branch you want to deploy).
+2. Go to **[share.streamlit.io](https://share.streamlit.io)** → sign in with GitHub → **Create app**.
+3. Pick the **repository**, **branch**, and set **Main file path** to `deployment/app.py`.
+4. **Deploy.** Streamlit Cloud installs `deployment/requirements.txt` automatically and gives a
+   public URL like `https://<app-name>.streamlit.app`.
+5. Cite that URL in the report / README / slides as the M6 live-link deliverable.
+
+*(The app finds `model.joblib` and `sample_transactions.csv` relative to `app.py`, so no extra
+config is needed.)*
+
+---
+
+## Routes A / B — Hugging Face Spaces (requires HF PRO for a running app)
+
+Both give a public URL like `https://huggingface.co/spaces/<user>/fraud-detection-demo`.
 
 The Space runs the **Streamlit review queue** (`app.py`), which scores transactions
 with the same `scoring.py` core as the API — so one Space satisfies the "deployed
