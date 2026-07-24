@@ -2,14 +2,19 @@
 
 Chạy local:  streamlit run app.py
 """
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
-from scoring import score_txn, THRESHOLD, MODEL_NAME, RAW_FIELDS
+from scoring import score_txn, THRESHOLD, BLOCK_THRESHOLD, MODEL_NAME, RAW_FIELDS
+
+HERE = Path(__file__).resolve().parent
 
 st.set_page_config(page_title="Fraud Review Queue", page_icon="🛡️", layout="wide")
 st.title("🛡️ Hàng đợi review giao dịch nghi gian lận")
-st.caption(f"Mô hình deploy: **{MODEL_NAME}** · Ngưỡng chặn (tối ưu chi phí): **{THRESHOLD:.2f}**")
+st.caption(f"Mô hình deploy: **{MODEL_NAME}** · Chính sách rủi ro 3 mức — "
+           f"duyệt < **{THRESHOLD:.2f}** ≤ review < **{BLOCK_THRESHOLD:.2f}** ≤ chặn tự động")
 
 
 def score_frame(df: pd.DataFrame) -> pd.DataFrame:
@@ -17,6 +22,7 @@ def score_frame(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out["fraud_probability"] = [r["fraud_probability"] for r in res]
     out["decision"] = [r["decision"] for r in res]
+    out["risk_tier"] = [r["risk_tier"] for r in res]
     return out.sort_values("fraud_probability", ascending=False).reset_index(drop=True)
 
 
@@ -36,14 +42,14 @@ if mode == "Nhập tay 1 giao dịch":
         r = score_txn({"type": typ, "amount": amount, "oldbalanceOrg": old_org,
                        "newbalanceOrig": new_orig, "oldbalanceDest": old_dest,
                        "newbalanceDest": new_dest})
-        (st.error if r["flagged_fraud"] else st.success)(
-            f"{r['decision']} — xác suất gian lận = {r['fraud_probability']:.2%}")
+        show = {"BLOCK": st.error, "REVIEW": st.warning, "APPROVE": st.success}[r["decision"]]
+        show(f"{r['decision']} ({r['risk_tier']}) — xác suất gian lận = {r['fraud_probability']:.2%}")
         st.json(r)
     st.stop()
 
 # ---- Chế độ hàng đợi ----
 if mode == "Mẫu có sẵn":
-    df = pd.read_csv("sample_transactions.csv")
+    df = pd.read_csv(HERE / "sample_transactions.csv")
 else:
     up = st.sidebar.file_uploader("CSV giao dịch", type="csv")
     if up is None:
@@ -56,13 +62,20 @@ if missing:
     st.error(f"CSV thiếu cột bắt buộc: {missing}")
     st.stop()
 
-scored = score_frame(df)
-n_flag = int((scored["decision"] != "APPROVE").sum())
+if len(df) == 0:
+    st.info("CSV không có dòng dữ liệu để chấm điểm.")
+    st.stop()
 
-m1, m2, m3 = st.columns(3)
+scored = score_frame(df)
+n_block = int((scored["decision"] == "BLOCK").sum())
+n_review = int((scored["decision"] == "REVIEW").sum())
+n_approve = int((scored["decision"] == "APPROVE").sum())
+
+m1, m2, m3, m4 = st.columns(4)
 m1.metric("Tổng giao dịch", len(scored))
-m2.metric("Bị gắn cờ (cần review)", n_flag)
-m3.metric("Tỉ lệ gắn cờ", f"{n_flag / max(len(scored), 1) * 100:.1f}%")
+m2.metric("⛔ Chặn tự động", n_block)
+m3.metric("🔍 Cần review", n_review)
+m4.metric("✅ Duyệt tự động", n_approve)
 
 st.subheader("Hàng đợi — rủi ro cao ➜ thấp")
 st.dataframe(

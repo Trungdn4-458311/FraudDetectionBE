@@ -54,7 +54,7 @@
 \newcommand{\warn}[1]{\textcolor{hustdark}{\textbf{#1}}}
 
 \title[Fraud Detection]{Real-Time Payment Fraud Detection}
-\subtitle{Business Analytics Group Project --- Modules 1--5}
+\subtitle{Business Analytics Group Project --- Modules 1--8}
 \author[Team]{[Team member names]}
 \institute[]{Business Analytics}
 \date{}
@@ -82,10 +82,11 @@
 \begin{enumerate}
     \setcounter{enumi}{5}
     \item Feature engineering \hfill \textit{(M4)}
-    \item Model results \hfill \textit{(M5)}
-    \item Cost-based threshold \hfill \textit{(M5)}
+    \item Model results \& cost threshold \hfill \textit{(M5)}
     \item \warn{What our numbers really mean}
-    \item Conclusion
+    \item Deploy: API $+$ review queue \hfill \textit{(M6)}
+    \item Monitoring $+$ retraining \hfill \textit{(M7)}
+    \item Risk policy \hfill \textit{(M8)} $+$ conclusion
 \end{enumerate}
 \end{column}
 \end{columns}
@@ -168,7 +169,7 @@ $\Rightarrow$ We use \good{PR-AUC}, Recall, $F_1$ --- never accuracy.
 \begin{column}{0.5\textwidth}
 \textbf{Source 2 --- Synthetic (Faker)}
 \begin{itemize}
-    \item \textbf{9 contextual features}
+    \item \textbf{10 contextual features}
     \item Account age, home country, device
     \item New-device flag, address mismatch
     \item Failed attempts, IP distance
@@ -365,10 +366,10 @@ Model & PR-AUC & Recall & Precision & FP & FN \\
 \midrule
 LogReg $\cdot$ Base       & 0.5932 & 0.9081 & 0.0433 & \warn{49{,}287} & 226 \\
 LogReg $\cdot$ Full       & 0.9704 & 0.9947 & 0.3348 & 4{,}860 & 13 \\
-\textbf{RF $\cdot$ Base}  & \good{0.9974} & 0.9967 & 0.9996 & \good{1} & 8 \\
-RF $\cdot$ Full           & 0.9996 & 0.9963 & 1.0000 & 0 & 9 \\
-XGBoost $\cdot$ Base      & 0.9944 & 0.9923 & 0.9204 & 211 & 19 \\
-XGBoost $\cdot$ Full      & 0.9997 & 0.9976 & 0.9927 & 18 & 6 \\
+\textbf{RF $\cdot$ Base}  & \good{0.9976} & 0.9967 & 0.9996 & \good{1} & 8 \\
+RF $\cdot$ Full           & 0.9997 & 0.9963 & 1.0000 & 0 & 9 \\
+XGBoost $\cdot$ Base      & 0.9944 & 0.9931 & 0.9222 & 206 & 17 \\
+XGBoost $\cdot$ Full      & 0.9996 & 0.9984 & 0.9923 & 19 & 4 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -406,8 +407,8 @@ The linear baseline degrades steadily; the four tree curves hug the corner.
 Algorithm & Base & Full & Uplift from synthetic data \\
 \midrule
 Logistic Regression & 0.5932 & 0.9704 & \warn{$+0.3772$} \\
-Random Forest       & 0.9974 & 0.9996 & \good{$+0.0022$} \\
-XGBoost             & 0.9944 & 0.9997 & \good{$+0.0053$} \\
+Random Forest       & 0.9976 & 0.9997 & \good{$+0.0021$} \\
+XGBoost             & 0.9944 & 0.9996 & \good{$+0.0052$} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -463,7 +464,7 @@ trade-off into money:
 \end{center}
 
 \centering
-\alert{Optimal $t^{*} = 0.21$, not $0.5$ $\Rightarrow$ total cost $-16.6\%$}
+\alert{Optimal $t^{*} = 0.17$, not $0.5$ $\Rightarrow$ total cost $-14.7\%$}
 \end{frame}
 
 % ---------------- 16
@@ -477,7 +478,7 @@ Indicator (test set) & Value \\
 Fraud value at risk        & $3{,}615{,}247{,}576$ \\
 \good{Fraud value stopped} & \good{$3{,}613{,}891{,}825$ \;($99.96\%$)} \\
 Fraud value leaked         & $1{,}355{,}751$ \\
-\good{False-positive rate} & \good{$0.031\%$} (260 transactions) \\
+\good{False-positive rate} & \good{$0.032\%$} (265 transactions) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -517,17 +518,83 @@ The explanation is \warn{the data, not the model}.
 We report this as a \textbf{limitation}, not a headline.
 \end{frame}
 
+% ---------------- 11. Deployment
+\begin{frame}{11. Deployment: real-time API + review queue}
+\begin{columns}[T]
+\begin{column}{0.52\textwidth}
+\textbf{Served model:} \good{XGBoost Base} (8 features)
+\begin{itemize}
+    \item \texttt{POST /predict} --- score one txn in real time
+    \item \texttt{GET /health} --- model metadata
+    \item \texttt{featurize()} rebuilds \texttt{errorBalance*} and
+    \texttt{type\_TRANSFER} on the server
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{Analyst review queue} (Streamlit)
+\begin{itemize}
+    \item ranks a batch high $\to$ low risk
+    \item per-txn approve / block $+$ action log
+\end{itemize}
+\vspace{0.4em}
+Free-tier deploy (Hugging Face Spaces), one-command push.
+\end{column}
+\end{columns}
+\vspace{0.5em}
+\centering
+\good{Live demo:} \url{https://namxle-hust.github.io/FraudDetectionBE/}\\
+{\footnotesize (model runs client-side --- matches the Python API to $2\times10^{-7}$)}
+\end{frame}
+
+% ---------------- 12. Monitoring
+\begin{frame}{12. Monitoring: drift, performance, retraining triggers}
+\begin{itemize}
+    \item \textbf{Data drift} --- PSI $+$ Kolmogorov--Smirnov on the 8 served features
+    \item \textbf{Performance over time} --- rolling precision / recall / PR-AUC by time window
+    \item \textbf{Retraining triggers} (fire on \emph{any}):
+    \begin{itemize}
+        \item max PSI $> 0.2$\, or\, $\ge 2$ features drifted
+        \item rolling recall $< 0.90$\, or\, precision $< 0.20$
+        \item rolling PR-AUC $> 0.1$ below reference
+    \end{itemize}
+\end{itemize}
+\vspace{0.3em}
+\centering
+Own implementation (\texttt{monitoring\_core.py}) $\to$ HTML dashboard;
+a stress test confirms the alerts fire.
+\end{frame}
+
+% ---------------- 13. Risk policy
+\begin{frame}{13. Risk policy: from a score to a business action}
+\centering
+\begin{tabular}{lll}
+\toprule
+Score band & Tier & Action \\
+\midrule
+$p < t^{*}$ & auto-approve & clear immediately \\
+$t^{*} \le p < b$ & manual-review & analyst queue \\
+$p \ge b$ & auto-block & block immediately \\
+\bottomrule
+\end{tabular}
+\vspace{0.8em}
+\begin{itemize}
+    \item $t^{*} \approx 0.09$ (deployed model, cost-optimal); \good{$b$} $=$ smallest score with precision $\ge 0.99$
+    \item Auto-block only when \textbf{near-certain}; grey zone $\to$ human review
+    \item Escalation signal $=$ the \texttt{errorBalanceOrig} balance mismatch
+\end{itemize}
+\end{frame}
+
 % ---------------- 18
 \begin{frame}{Conclusion}
 \begin{columns}[T]
 \begin{column}{0.5\textwidth}
 \textbf{What we delivered}
 \begin{itemize}
-    \item End-to-end pipeline, Modules 1--5
+    \item End-to-end pipeline, Modules 1--8
     \item 2 data sources $+$ full data dictionary
     \item Documented cleaning with audit log
     \item 3 algorithms $\times$ 2 feature spaces
-    \item Cost-based operating threshold
+    \item Cost threshold $+$ deploy $+$ monitoring $+$ risk policy
 \end{itemize}
 \end{column}
 \begin{column}{0.5\textwidth}
@@ -535,7 +602,7 @@ We report this as a \textbf{limitation}, not a headline.
 \begin{itemize}
     \item \good{Random Forest Base} --- best honest model
     \item \good{XGBoost Base} --- deploy (compact, fast, leak-free)
-    \item Operate at \good{$t^{*} = 0.21$}
+    \item Operate at \good{$t^{*} = 0.17$}
 \end{itemize}
 \end{column}
 \end{columns}
@@ -548,7 +615,8 @@ and we can explain \emph{exactly} why our scores are high.
 
 \vspace{0.5em}
 \centering
-\textbf{Next:} deployment (M6), monitoring (M7), risk-policy recommendations (M8)
+\textbf{Next:} methodological hardening --- temporal split, cross-validation,
+$C_{FP}$ from real costs, validation on genuine transaction data
 \end{frame}
 
 % ---------------- 19
@@ -581,8 +649,8 @@ and we can explain \emph{exactly} why our scores are high.
 
 \begin{frame}{Backup: why does RF beat XGBoost at $t=0.5$?}
 \begin{itemize}
-    \item Ranking gap is \emph{small}: PR-AUC $0.9974$ vs $0.9944$
-    \item Precision gap is \emph{large}: $0.9996$ vs $0.9204$ (1 vs 211 FP)
+    \item Ranking gap is \emph{small}: PR-AUC $0.9976$ vs $0.9944$
+    \item Precision gap is \emph{large}: $0.9996$ vs $0.9222$ (1 vs 206 FP)
     \item $\Rightarrow$ the difference is \textbf{calibration}, not ranking ability
     \item XGBoost multiplies positive gradients by $337$, inflating
     probabilities toward the positive class; many negatives land above $0.5$

@@ -41,5 +41,5 @@ def health():
 
 @app.post("/predict")
 def predict(txn: Transaction):
-    """Trả về xác suất gian lận + quyết định (APPROVE / BLOCK-REVIEW)."""
+    """Trả về xác suất gian lận + quyết định 3 mức (APPROVE / REVIEW / BLOCK)."""
     return score_txn(txn.model_dump())
