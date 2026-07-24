@@ -42,6 +42,19 @@ streamlit run app.py          # analyst review queue
 
 `README.md` in `deployment/` carries the Hugging Face Spaces YAML header (SDK: streamlit); deploying = pushing that folder to a Space.
 
+## Browser demo (`web/`) — GitHub Pages
+
+A zero-backend demo at <https://namxle-hust.github.io/FraudDetectionBE/>, English, two tabs:
+
+- **Review queue** (Module 6) — 10 sample transactions scored client-side.
+- **Live monitoring** (Module 7) — a simulated feed scored by the real model, monitored live: drift table, rolling precision/recall/PR-AUC chart, retrain-trigger verdict, and a Steady/Degraded regime toggle for demoing an incident.
+
+Files: `export_web.py` dumps `deployment/model.joblib` to `model.json` (300 XGBoost trees + base margin) and **asserts JS-eval parity with `predict_proba` to 1e-6**; `monitoring.js` is a faithful JS port of `monitoring/monitoring_core.py`; `index.html` is the whole UI (inline CSS/JS, no dependencies). `web/model.json` is git-ignored — regenerate it with `python web/export_web.py` (writes `docs_model.json`; move it to `web/model.json`).
+
+Two things must stay in step or the demo silently lies: `monitoring.js` vs `monitoring_core.py` (guarded by `tests/test_web_monitoring_parity.py`) and the JS `featurize()` vs `deployment/scoring.py`. The **feed is simulated** (PaySim is a static file and real fraud labels would lag by weeks) — the page says so explicitly; keep that disclosure if you touch the copy.
+
+**Deploying is manual**: the `gh-pages` branch on the `hust` remote is a flat site (`index.html`, `monitoring.js`, `model.json` at root), not a subtree push. Copy those three files into a `gh-pages` worktree, commit, push.
+
 ## Report & slides (`report/`, `slides/`) — graded deliverables
 
 Two LaTeX documents accompany the notebook. Unlike the notebook (Vietnamese), the **report and slide bodies are in English**; only `slides/speaker-notes.md` (the ~18–20 min presenter script for Modules 1–5) is Vietnamese. So "keep new content Vietnamese" applies to the *notebook*, not these.
@@ -68,4 +81,4 @@ Facts worth keeping consistent when writing/reporting:
 
 ## Verification
 
-There **is** a committed pytest suite (`tests/`, run with `pixi run test`): `test_scoring.py` (featurize + 3-tier decide), `test_monitoring_core.py` (PSI/drift/rolling/triggers, incl. the effect-size-not-p-value rule), `test_api.py` (FastAPI TestClient), `test_build_monitoring.py`, `test_pdf_to_pptx.py`. Tests use a scikit-learn stand-in model via `MODEL_PATH` (see `tests/conftest.py`), so they don't need the trained bundle or the 493 MB dataset, and are hermetic (never write into deliverable paths). For quick checks of edited notebook cells, still prefer syntax/`nbformat.validate` + small synthetic DataFrames over a full 3-min notebook run.
+There **is** a committed pytest suite (`tests/`, run with `pixi run test`): `test_scoring.py` (featurize + 3-tier decide), `test_monitoring_core.py` (PSI/drift/rolling/triggers, incl. the effect-size-not-p-value rule), `test_api.py` (FastAPI TestClient), `test_build_monitoring.py`, `test_pdf_to_pptx.py`, `test_web_monitoring_parity.py` (the JS port in `web/monitoring.js` vs the Python, skipped when `node` is absent). Tests use a scikit-learn stand-in model via `MODEL_PATH` (see `tests/conftest.py`), so they don't need the trained bundle or the 493 MB dataset, and are hermetic (never write into deliverable paths). For quick checks of edited notebook cells, still prefer syntax/`nbformat.validate` + small synthetic DataFrames over a full 3-min notebook run.
