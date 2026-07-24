@@ -47,7 +47,7 @@ streamlit run app.py          # analyst review queue
 A zero-backend demo at <https://namxle-hust.github.io/FraudDetectionBE/>, English, two tabs:
 
 - **Review queue** (Module 6) — 10 sample transactions scored client-side.
-- **Live monitoring** (Module 7) — a simulated feed scored by the real model, monitored live: drift table, rolling precision/recall/PR-AUC chart, retrain-trigger verdict, and a Steady/Degraded regime toggle for demoing an incident.
+- **Live monitoring** (Module 7) — a simulated feed scored by the real model, on **two timescales**: **drift** (PSI/KS) is live because it runs on features alone; **performance** (precision/recall/PR-AUC) is a *lagged batch* reconciled on demand ("Reconcile labels"), because it needs the confirmed-fraud label, which lags weeks in production. The retrain verdict combines live drift with the last reconciled batch. Steady/Degraded regime toggle demoes an incident (drift fires live; reconcile to confirm the precision hit). This split is deliberate — showing label-dependent metrics as live would misstate how monitoring works.
 
 Files: `export_web.py` dumps `deployment/model.joblib` to `model.json` (300 XGBoost trees + base margin) and **asserts JS-eval parity with `predict_proba` to 1e-6**; `monitoring.js` is a faithful JS port of `monitoring/monitoring_core.py`; `index.html` is the whole UI (inline CSS/JS, no dependencies). `web/model.json` is git-ignored — regenerate it with `python web/export_web.py` (writes `docs_model.json`; move it to `web/model.json`).
 
@@ -57,7 +57,7 @@ Two things must stay in step or the demo silently lies: `monitoring.js` vs `moni
 
 ## Report & slides (`report/`, `slides/`) — graded deliverables
 
-Two LaTeX documents accompany the notebook. Unlike the notebook (Vietnamese), the **report and slide bodies are in English**; only `slides/speaker-notes.md` (the ~18–20 min presenter script for Modules 1–5) is Vietnamese. So "keep new content Vietnamese" applies to the *notebook*, not these.
+Two LaTeX documents accompany the notebook. Unlike the notebook (Vietnamese), the **report and slide bodies are in English**; only `slides/speaker-notes.md` (the presenter script — detailed narration for Modules 1–5 plus short notes for the Module 6–8 frames) is Vietnamese. So "keep new content Vietnamese" applies to the *notebook*, not these.
 
 - `report/main.tex` → `report/main.pdf` — LaTeX `article`, the full written report.
 - `slides/main.tex` → `slides/main.pdf` — Beamer deck (`aspectratio=169`, `Madrid` theme, HUST-red brand palette defined near the top of the file).
@@ -77,7 +77,7 @@ Facts worth keeping consistent when writing/reporting:
 - Fraud only occurs in `TRANSFER` and `CASH_OUT`; Module 4 filters to these (positive rate rises 0.129% → 0.296%).
 - Near-perfect scores (e.g. RandomForest Base PR-AUC 0.997, 1 false positive) reflect PaySim being *nearly separable by design*, not model brilliance — always report this as a limitation.
 - **RandomForest Base** is the best honest model on metrics; **XGBoost Base** is what gets deployed (compact, fast, no leakage). Class imbalance is handled with class weights / `scale_pos_weight` (not resampling). The Module 5.4 cost-optimal threshold for the analysis model is **~0.17** (minimizing missed-fraud amount + `COST_FP=10` per false alarm); the **deployed 8-feature model is retrained separately and has its own threshold (~0.09)** stored in `model.joblib` — these are different models, don't conflate their thresholds.
-- Risk policy is 3-tier: below `threshold` → auto-approve, `[threshold, block_threshold)` → manual-review, `≥ block_threshold` (~0.80, calibrated to test precision ≥ 0.99) → auto-block (`deployment/scoring.py`).
+- Risk policy is 3-tier: below `threshold` → auto-approve, `[threshold, block_threshold)` → manual-review, `≥ block_threshold` (~0.80) → auto-block (`deployment/scoring.py`). The Module 6 cell *targets* the smallest score with test precision ≥ 0.99, but the reduced 8-feature deploy model never reaches it, so `block_threshold` falls back to the literal 0.80 — treat it as a conservative chosen operating point, not a data-calibrated one.
 
 ## Verification
 
