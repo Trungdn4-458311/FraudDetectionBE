@@ -50,10 +50,12 @@ curl -X POST http://127.0.0.1:8000/predict \
   -d '{"type":"TRANSFER","amount":181,"oldbalanceOrg":181,"newbalanceOrig":0,"oldbalanceDest":0,"newbalanceDest":0}'
 ```
 
-## Deploy lên Hugging Face Spaces (free)
+## Deploy (live link)
 
-1. Tạo Space mới: **New Space** → SDK **Streamlit** → chọn tên.
-2. Upload toàn bộ file trong thư mục `deployment/` (gồm cả `model.joblib`) lên Space, hoặc `git push` vào repo của Space.
-3. Space tự cài `requirements.txt` và chạy `app.py` → có **link công khai** (chính là deliverable "live link" của đề).
+Đường deploy free-tier chính hiện nay là **Streamlit Community Cloud** — xem hướng dẫn đầy đủ trong [`DEPLOY.md`](DEPLOY.md) (Route 0). Tóm tắt:
 
-> Muốn kèm cả API FastAPI trên cùng Space: đổi sang SDK **Docker** và viết `Dockerfile` chạy đồng thời `uvicorn` + `streamlit`. Với yêu cầu đề bài, deploy Streamlit là đủ để có live link; API chạy/deploy riêng khi cần.
+1. Push repo lên GitHub, vào [share.streamlit.io](https://share.streamlit.io) → **New app**.
+2. Chọn repo, đặt `deployment/app.py` làm entry point (đã có sẵn `requirements.txt` và `model.joblib`).
+3. Streamlit tự build và cấp **link công khai** — chính là deliverable "live link" của đề.
+
+> **Lưu ý:** Hugging Face Spaces free tier hiện không còn chạy app Streamlit/Docker liên tục (cần HF **PRO**). YAML header phía trên file này vẫn dùng được nếu deploy lên HF PRO. Ngoài ra repo đã có **demo chạy client-side** trên GitHub Pages (thư mục [`web/`](../web/)) làm live link không cần server Python.

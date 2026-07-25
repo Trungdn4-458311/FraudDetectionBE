@@ -438,8 +438,8 @@ XGBoost             & 0.9944 & 0.9996 & \good{$+0.0052$} \\
 
 \vspace{1em}
 \begin{itemize}
-    \item \texttt{errorBalanceOrig} alone $= \good{53.7\%}$
-    \item Synthetic total $\approx 28\%$
+    \item \texttt{errorBalanceOrig} alone $= \good{61.8\%}$
+    \item Synthetic total $\approx 8\%$
     \item Velocity features $= \warn{0.000}$
 \end{itemize}
 
@@ -506,7 +506,7 @@ The explanation is \warn{the data, not the model}.
 \begin{itemize}
     \item PaySim scripts fraud as ``empty the account'' $\Rightarrow$ an
     \textbf{almost deterministic} arithmetic footprint
-    \item \texttt{errorBalanceOrig} captures it directly ($53.7\%$ importance)
+    \item \texttt{errorBalanceOrig} captures it directly ($61.8\%$ importance)
     \item Evidence: the \emph{linear} model fails ($0.59$) while both tree
     models exceed $0.99$ $\Rightarrow$ one nonlinear, near-deterministic rule
     \item Our synthetic features add leakage on top
@@ -537,7 +537,7 @@ We report this as a \textbf{limitation}, not a headline.
     \item per-txn approve / block $+$ action log
 \end{itemize}
 \vspace{0.4em}
-Free-tier deploy (Hugging Face Spaces), one-command push.
+Free-tier deploy (Streamlit Community Cloud), one-command push.
 \end{column}
 \end{columns}
 \vspace{0.5em}
@@ -578,7 +578,7 @@ $p \ge b$ & auto-block & block immediately \\
 \end{tabular}
 \vspace{0.8em}
 \begin{itemize}
-    \item $t^{*} \approx 0.09$ (deployed model, cost-optimal); \good{$b$} $=$ smallest score with precision $\ge 0.99$
+    \item $t^{*} \approx 0.09$ (deployed model, cost-optimal); \good{$b \approx 0.80$} --- target precision $\ge 0.99$, else conservative fallback
     \item Auto-block only when \textbf{near-certain}; grey zone $\to$ human review
     \item Escalation signal $=$ the \texttt{errorBalanceOrig} balance mismatch
 \end{itemize}
@@ -627,7 +627,7 @@ $C_{FP}$ from real costs, validation on genuine transaction data
 
 \vspace{2em}
 \normalsize
-\url{https://github.com/Trungdn4-458311/FraudDetectionBE}
+\url{https://github.com/namxle-hust/FraudDetectionBE}
 \end{frame}
 
 % ---------------- backup

@@ -1,6 +1,6 @@
 ﻿column,dtype,unit,valid_range,generation_logic
 account_age_days,int32,ngày,1–3650,"Tuổi tài khoản cấp theo nameOrig, phân phối Gamma; tài khoản từng gian lận trẻ hơn (mean ~44) so với hợp lệ (mean ~500)."
-home_country,category/str,-,~240 quốc gia (Faker),"Quốc gia thanh toán của tài khoản, chọn ngẫu nhiên đều từ pool quốc gia sinh bởi Faker."
+home_country,category/str,-,171 quốc gia (Faker),"Quốc gia thanh toán của tài khoản, chọn ngẫu nhiên đều từ pool quốc gia sinh bởi Faker."
 device_fingerprint,str (SHA1),-,hash 40 ký tự hex,"Vân tay thiết bị thường dùng của tài khoản, sample từ pool 5.000 hash SHA1 (Faker)."
 hour_of_day,int16,giờ,0–23,Suy trực tiếp từ step gốc: step % 24 (1 step = 1 giờ).
 shipping_billing_mismatch,int8 (0/1),cờ nhị phân,"{0, 1}","Lệch địa chỉ giao hàng vs thanh toán; Bernoulli p=0.40 nếu gian lận, p=0.03 nếu hợp lệ."

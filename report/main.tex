@@ -42,7 +42,8 @@
 \author{%
   \textbf{Team:} [Insert team member names] \\[0.4em]
   \textbf{Course:} Business Analytics \\[0.4em]
-  \textbf{Source:} \url{https://github.com/Trungdn4-458311/FraudDetectionBE}%
+  \textbf{Source:} \url{https://github.com/namxle-hust/FraudDetectionBE} \\[0.4em]
+  \textbf{Live demo:} \url{https://namxle-hust.github.io/FraudDetectionBE/}%
 }
 \date{}
 
@@ -76,7 +77,7 @@ this, we quantify it through a systematic Base-vs-Full comparison. Our
 strongest models reach PR-AUC $>0.99$ (Random Forest Base: $0.9976$
 with a single false positive out of $828{,}659$ legitimate
 transactions), and a cost-optimal threshold of $t^{*}=0.17$ stops
-$\approx$$100\%$ of fraud value at a false-positive rate of $0.032\%$.
+$99.96\%$ of fraud value at a false-positive rate of $0.032\%$.
 Critically, we show that these near-perfect scores largely reflect the
 \emph{easiness} of the data---PaySim encodes fraud with a
 near-deterministic balance signature---rather than genuine real-world
@@ -313,7 +314,7 @@ project brief. The dictionary is exported programmatically to
 Field & Type / Unit & Valid range & Generation logic \\
 \midrule
 \texttt{account\_age\_days}          & int32 / days  & $1$--$3650$ & Gamma; fraud accounts younger (mean $\sim$44 vs $\sim$500) \\
-\texttt{home\_country}               & category      & $\sim$240 countries & Uniform draw from a Faker country pool \\
+\texttt{home\_country}               & category      & $171$ countries & Uniform draw from a Faker country pool \\
 \texttt{device\_fingerprint}         & SHA1 str      & 40 hex chars & Sample from a pool of 5{,}000 hashes \\
 \texttt{hour\_of\_day}               & int16 / hour  & $0$--$23$ & Derived: \texttt{step} \% 24 \\
 \texttt{shipping\_billing\_mismatch} & int8 (0/1)    & $\{0,1\}$ & Bernoulli $p{=}0.40$ (fraud) / $0.03$ \\
@@ -424,7 +425,7 @@ imbalance-aware metrics and training strategies
 Fraud occurs \textbf{exclusively} in \texttt{TRANSFER} and
 \texttt{CASH\_OUT} (Table~\ref{tab:bytype}); the other three types
 contain zero positives. \texttt{TRANSFER} has the highest fraud rate
-($0.769\%$, over $4\times$ the platform average), consistent with the
+($0.769\%$, nearly $6\times$ the platform average), consistent with the
 simulation's fraud mechanism described in Section~\ref{sec:data}. This
 finding directly motivates the type filter in
 Section~\ref{subsec:filter}.
@@ -748,10 +749,15 @@ percentile $1$, maximum $3$) and \texttt{time\_since\_last\_txn} is
 $-1$ for the majority of rows. The reason is structural---origin
 accounts almost never recur in the simulation. The features are
 implemented correctly and satisfy the requirement, but they carry
-almost no information here, which is confirmed independently by both
-mutual information (Table~\ref{tab:mi}) and model importance
-(Table~\ref{tab:importance}, both $= 0.000$). On a real platform with
-returning customers they would be far more valuable.
+almost no information here: both receive \textbf{exactly zero} gain
+importance in the fitted models (Table~\ref{tab:importance}). Mutual
+information agrees for \texttt{time\_since\_last\_txn} ($0.0007$) but
+rates \texttt{txn\_count\_acct} spuriously high ($0.0093$, second in
+Table~\ref{tab:mi})---an artifact of estimating MI for a near-constant
+discrete variable (mean $1.00$, maximum $3$), and exactly the pitfall of
+univariate selection discussed in Section~\ref{subsec:select}. On a real
+platform with returning customers these features would be far more
+valuable.
 
 \subsection{Encoding and scaling}
 The only categorical predictor, \texttt{type}, is binary after
@@ -784,6 +790,7 @@ on $1.9$M training rows. Combined with the type filter
 and the loss level.
 
 \subsection{Feature selection}
+\label{subsec:select}
 We rank features by \textbf{mutual information} (MI) with the label,
 estimated on a $50{,}000$-row subsample
 (Table~\ref{tab:mi}). Only \texttt{newbalanceOrig} falls below the
@@ -812,7 +819,7 @@ Feature & MI & Feature & MI \\
 \paragraph{A caution about univariate selection.} MI ranks
 \texttt{errorBalanceOrig} only fifth, yet it is by far the most
 important feature in the fitted models
-(Table~\ref{tab:importance}, importance $0.537$). The discrepancy is
+(Table~\ref{tab:importance}, importance $0.618$). The discrepancy is
 expected: MI is \emph{univariate} and cannot see that
 \texttt{errorBalanceOrig} is a constructed interaction whose
 discriminative power emerges jointly with other balance columns. Had we
@@ -1066,7 +1073,7 @@ LogReg $\cdot$ Base       & 0.5932 & 0.9782 & 0.9081 & 0.0433 & 0.0827 \\
 LogReg $\cdot$ Full       & 0.9704 & 0.9999 & 0.9947 & 0.3348 & 0.5010 \\
 RandomForest $\cdot$ Base & 0.9976 & 0.9989 & 0.9967 & 0.9996 & \textbf{0.9982} \\
 RandomForest $\cdot$ Full & \textbf{0.9997} & \textbf{1.0000} & 0.9963 & \textbf{1.0000} & \textbf{0.9982} \\
-XGBoost $\cdot$ Base      & 0.9944 & 0.9989 & 0.9931 & 0.9222 & 0.9564 \\
+XGBoost $\cdot$ Base      & 0.9944 & 0.9989 & 0.9931 & 0.9222 & 0.9563 \\
 XGBoost $\cdot$ Full      & 0.9996 & \textbf{1.0000} & \textbf{0.9984} & 0.9923 & 0.9953 \\
 \bottomrule
 \end{tabular}
@@ -1146,13 +1153,15 @@ Random Forest attains PR-AUC $0.9976$ versus XGBoost's $0.9944$, yet
 the gap in \emph{precision at $t = 0.5$} is far larger ($0.9996$ vs
 $0.9222$; $1$ vs $206$ false positives). The discrepancy between a
 small ranking gap and a large threshold gap identifies the cause as
-\textbf{calibration, not ranking ability}. XGBoost multiplies every
-positive gradient by $\approx 337$
-(Section~\ref{subsec:weighting}), which deliberately inflates predicted
-probabilities toward the positive class; consequently many negatives
-land above $0.5$ even though they are still ranked below the true
-positives. Random Forest's probabilities, obtained by averaging $100$
-tree votes, remain closer to the empirical class proportions.
+\textbf{calibration, not ranking ability}. Both models are reweighted
+by the same $\approx 337{:}1$ factor (Section~\ref{subsec:weighting}),
+so the gap is not the reweighting itself but where each model's scores
+land. XGBoost is additive in log-odds: the heavy positive weight shifts
+the \emph{entire} score distribution upward, so many negatives cross
+$0.5$ even while still ranked below the true positives. Random Forest
+instead averages $100$ deep, near-pure trees, which drives most scores
+to the extremes ($0$ or $1$); few legitimate transactions land near
+$0.5$, so its precision at the default threshold stays high.
 
 Two conclusions follow. First, comparing models at an arbitrary
 threshold of $0.5$ penalizes aggressively reweighted learners for a
@@ -1206,16 +1215,15 @@ Synthetic features are marked $\dagger$.}
 \toprule
 Feature & Importance & Feature & Importance \\
 \midrule
-\texttt{errorBalanceOrig}                  & 0.537 & \texttt{shipping\_billing\_mismatch}$^\dagger$ & 0.010 \\
-\texttt{account\_age\_days}$^\dagger$      & 0.157 & \texttt{oldbalanceOrg}          & 0.007 \\
-\texttt{newbalanceOrig}                    & 0.121 & \texttt{is\_new\_device}$^\dagger$ & 0.007 \\
-\texttt{failed\_payment\_attempts}$^\dagger$ & 0.079 & \texttt{hour\_of\_day}$^\dagger$ & 0.004 \\
-\texttt{ip\_billing\_mismatch}$^\dagger$   & 0.028 & \texttt{ip\_billing\_distance\_km}$^\dagger$ & 0.003 \\
-\texttt{type\_TRANSFER}                    & 0.016 & \texttt{oldbalanceDest}         & 0.002 \\
-\texttt{newbalanceDest}                    & 0.014 & \texttt{errorBalanceDest}       & 0.001 \\
-\texttt{amount}                            & 0.013 & \texttt{step}                   & 0.001 \\
-                                           &       & \texttt{txn\_count\_acct}       & 0.000 \\
-                                           &       & \texttt{time\_since\_last\_txn} & 0.000 \\
+\texttt{errorBalanceOrig}                    & 0.618 & \texttt{type\_TRANSFER}                   & 0.009 \\
+\texttt{newbalanceOrig}                      & 0.198 & \texttt{is\_new\_device}$^\dagger$        & 0.008 \\
+\texttt{oldbalanceOrg}                       & 0.039 & \texttt{shipping\_billing\_mismatch}$^\dagger$ & 0.004 \\
+\texttt{account\_age\_days}$^\dagger$        & 0.036 & \texttt{hour\_of\_day}$^\dagger$          & 0.001 \\
+\texttt{ip\_billing\_mismatch}$^\dagger$     & 0.023 & \texttt{oldbalanceDest}                   & 0.001 \\
+\texttt{errorBalanceDest}                    & 0.021 & \texttt{step}                             & 0.001 \\
+\texttt{newbalanceDest}                      & 0.017 & \texttt{ip\_billing\_distance\_km}$^\dagger$ & 0.001 \\
+\texttt{amount}                              & 0.012 & \texttt{txn\_count\_acct}                 & 0.000 \\
+\texttt{failed\_payment\_attempts}$^\dagger$ & 0.011 & \texttt{time\_since\_last\_txn}           & 0.000 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1233,11 +1241,13 @@ a real feature, not a synthetic one.}
 \end{figure}
 
 Three observations. First, \texttt{errorBalanceOrig} alone accounts for
-$53.7\%$ of total importance, confirming the EDA hypothesis that the
+$61.8\%$ of total importance, confirming the EDA hypothesis that the
 accounting-identity violation is the dominant fraud footprint. Second,
-the synthetic features contribute a combined $\approx 28\%$, with
-\texttt{account\_age\_days} the largest---so the model does lean on
-leaky inputs, but real features still dominate. Third, both velocity
+the seven synthetic features contribute a combined $\approx 8\%$
+(\texttt{account\_age\_days} the largest at $0.036$), so the model
+barely leans on the leaky inputs: the top two features
+(\texttt{errorBalanceOrig} and \texttt{newbalanceOrig}) are both real
+and together hold $\approx 82\%$. Third, both velocity
 features receive \textbf{exactly zero} importance, independently
 confirming the degeneracy diagnosed in Section~\ref{sec:feat}.
 
@@ -1295,13 +1305,15 @@ that the curve is essentially \emph{flat} below $t \approx 0.25$ and
 then rises steeply: the optimum is a broad plateau rather than a sharp
 point, which is the graphical counterpart of the insensitivity to
 $C_{FP}$ argued in Section~\ref{subsec:sensitivity}. Cost more than
-quadruples as $t \to 1$, when the model stops blocking and fraud value
-is lost outright.}
+triples (about $3.5\times$, from $\approx 1.36$M to $\approx 4.75$M) as
+$t \to 1$, when the model stops blocking and fraud value is lost
+outright.}
 \label{fig:cost}
 \end{figure}
 
-The economics are intuitive: lowering the threshold admits $49$
-additional false positives, costing $49 \times 10 = 490$ units, but
+The economics are intuitive: lowering the threshold from $0.5$ to
+$0.17$ admits $59$ additional false positives (Table~\ref{tab:cost}),
+costing $59 \times 10 = 590$ units, but
 recovers considerably more in prevented fraud value. Because the
 average fraud is worth $\sim$$1.47$M, catching even one extra fraud
 justifies thousands of extra reviews---the optimizer is simply
@@ -1483,15 +1495,18 @@ $p \ge b$ & auto-block & block immediately & near-certain fraud \\
 \caption{Three-tier risk policy. $t^{*}$ is the \emph{deployed} model's
 cost-optimal threshold ($\approx 0.09$, read from \texttt{model.joblib} --- see
 Section~\ref{sec:deployment}), applied by \texttt{scoring.py}; $b$ is the
-auto-block threshold, calibrated as the smallest score at which held-out
-precision reaches $0.99$ ($\approx 0.80$).}
+auto-block threshold: the routine targets the lowest score at which test-set
+precision reaches $0.99$, and falls back to a conservative $0.80$ when the reduced
+eight-feature model does not attain it --- as is the case here, so $b \approx 0.80$.}
 \label{tab:riskpolicy}
 \end{table}
 
-The auto-block boundary $b$ is chosen from data rather than assumed: we take the
-lowest score at which precision on the held-out set reaches $0.99$, so automatic
-blocks are near-certain while the ambiguous middle band is routed to a human
-rather than actioned automatically. Because a high score is driven by the
+The auto-block boundary $b$ is set conservatively. Our selection routine searches
+for the lowest score at which precision on the test set reaches $0.99$; the
+reduced eight-feature deployed model does not reach that precision at any operating
+point, so $b$ falls back to a deliberately high $0.80$. Either way, automatic blocks
+are reserved for near-certain cases while the ambiguous middle band is routed to a
+human rather than actioned automatically. Because a high score is driven by the
 balance-error footprint (\texttt{errorBalanceOrig},
 Eq.~\ref{eq:errOrig}), the policy reads naturally: a transaction whose origin
 balance fails to reconcile by the transferred amount is what escalates it. The
@@ -1514,7 +1529,7 @@ PaySim generates fraud through a scripted mechanism: the fraudulent
 agent empties the origin account. That action leaves an
 \emph{almost deterministic} arithmetic footprint in the balance
 columns, which \texttt{errorBalanceOrig} (Eq.~\ref{eq:errOrig})
-captures directly---hence its $53.7\%$ importance share. The decision
+captures directly---hence its $61.8\%$ importance share. The decision
 boundary is therefore close to a rule, and any sufficiently flexible
 model finds it. Notably, the linear model does \emph{not}, because the
 footprint is a nonlinear interaction of three columns: this is why
@@ -1525,7 +1540,7 @@ performance is driven by one nonlinear, near-deterministic pattern.
 \subsection{Assessment of label leakage}
 Our Base/Full design lets us bound the leakage effect rather than
 speculate. Two findings emerge. First, the leakage is \textbf{real}:
-synthetic features hold $\approx 28\%$ of XGBoost-Full importance and
+synthetic features hold $\approx 8\%$ of XGBoost-Full importance and
 lift Logistic Regression by $+0.38$ PR-AUC. Second, it is
 \textbf{not load-bearing for the best models}: tree ensembles gain only
 $+0.002$ to $+0.005$, and the strongest honest configuration (Random
@@ -1586,7 +1601,27 @@ GitHub's file-size limit) and must be downloaded from Kaggle; the
 repository README documents the procedure. The synthetic features, the
 data dictionary, and every table in this report are regenerated
 deterministically by re-running the notebook. Source code is available
-at \url{https://github.com/Trungdn4-458311/FraudDetectionBE}.
+at \url{https://github.com/namxle-hust/FraudDetectionBE}.
+
+The Python environment is pinned by \texttt{pixi.toml} and
+\texttt{pixi.lock}: \texttt{pixi install} recreates it exactly, and the
+project entry points run through it (\texttt{pixi run
+notebook\,/\,monitor\,/\,api\,/\,app\,/\,test}). The scoring core, the
+monitoring library and the API are covered by a committed \texttt{pytest}
+suite (\texttt{pixi run test}), which is hermetic---it exercises the
+serving logic against a lightweight stand-in model injected through the
+\texttt{MODEL\_PATH} environment variable, so the tests need neither the
+trained bundle nor the $493$\,MB dataset. The two \LaTeX{} deliverables
+(this report and the slides) build in a pinned TeX~Live Docker image via
+the \texttt{Makefile}.
+
+\paragraph{Originality.} All code---the notebook, the synthetic-data
+generator, the \texttt{deployment/}, \texttt{monitoring/} and
+\texttt{web/} packages, and the test suite---was written by the team.
+We use only open-source libraries (pandas, NumPy, scikit-learn, XGBoost,
+Faker, FastAPI, Streamlit, matplotlib); the monitoring drift/PSI/KS and
+retraining-trigger logic is our own implementation rather than a
+turnkey tool. No no-code or AutoML platform was used at any stage.
 
 % =========================
 \section{Conclusion and Future Work}
