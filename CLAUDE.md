@@ -42,9 +42,22 @@ streamlit run app.py          # analyst review queue
 
 `README.md` in `deployment/` carries the Hugging Face Spaces YAML header (SDK: streamlit); deploying = pushing that folder to a Space.
 
+## Browser demo (`web/`) — GitHub Pages
+
+A zero-backend demo at <https://namxle-hust.github.io/FraudDetectionBE/>, English, two tabs:
+
+- **Review queue** (Module 6) — 10 sample transactions scored client-side.
+- **Live monitoring** (Module 7) — a simulated feed scored by the real model, on **two timescales**: **drift** (PSI/KS) is live because it runs on features alone; **performance** (precision/recall/PR-AUC) is a *lagged batch* reconciled on demand ("Reconcile labels"), because it needs the confirmed-fraud label, which lags weeks in production. The retrain verdict combines live drift with the last reconciled batch. Steady/Degraded regime toggle demoes an incident (drift fires live; reconcile to confirm the precision hit). This split is deliberate — showing label-dependent metrics as live would misstate how monitoring works.
+
+Files: `export_web.py` dumps `deployment/model.joblib` to `model.json` (300 XGBoost trees + base margin) and **asserts JS-eval parity with `predict_proba` to 1e-6**; `monitoring.js` is a faithful JS port of `monitoring/monitoring_core.py`; `index.html` is the whole UI (inline CSS/JS, no dependencies). `web/model.json` is git-ignored — regenerate it with `python web/export_web.py` (writes `docs_model.json`; move it to `web/model.json`).
+
+Two things must stay in step or the demo silently lies: `monitoring.js` vs `monitoring_core.py` (guarded by `tests/test_web_monitoring_parity.py`) and the JS `featurize()` vs `deployment/scoring.py`. The **feed is simulated** (PaySim is a static file and real fraud labels would lag by weeks) — the page says so explicitly; keep that disclosure if you touch the copy.
+
+**Deploying is manual**: the `gh-pages` branch on the `hust` remote is a flat site (`index.html`, `monitoring.js`, `model.json` at root), not a subtree push. Copy those three files into a `gh-pages` worktree, commit, push.
+
 ## Report & slides (`report/`, `slides/`) — graded deliverables
 
-Two LaTeX documents accompany the notebook. Unlike the notebook (Vietnamese), the **report and slide bodies are in English**; only `slides/speaker-notes.md` (the ~18–20 min presenter script for Modules 1–5) is Vietnamese. So "keep new content Vietnamese" applies to the *notebook*, not these.
+Two LaTeX documents accompany the notebook. Unlike the notebook (Vietnamese), the **report and slide bodies are in English**; only `slides/speaker-notes.md` (the presenter script — detailed narration for Modules 1–5 plus short notes for the Module 6–8 frames) is Vietnamese. So "keep new content Vietnamese" applies to the *notebook*, not these.
 
 - `report/main.tex` → `report/main.pdf` — LaTeX `article`, the full written report.
 - `slides/main.tex` → `slides/main.pdf` — Beamer deck (`aspectratio=169`, `Madrid` theme, HUST-red brand palette defined near the top of the file).
@@ -64,8 +77,8 @@ Facts worth keeping consistent when writing/reporting:
 - Fraud only occurs in `TRANSFER` and `CASH_OUT`; Module 4 filters to these (positive rate rises 0.129% → 0.296%).
 - Near-perfect scores (e.g. RandomForest Base PR-AUC 0.997, 1 false positive) reflect PaySim being *nearly separable by design*, not model brilliance — always report this as a limitation.
 - **RandomForest Base** is the best honest model on metrics; **XGBoost Base** is what gets deployed (compact, fast, no leakage). Class imbalance is handled with class weights / `scale_pos_weight` (not resampling). The Module 5.4 cost-optimal threshold for the analysis model is **~0.17** (minimizing missed-fraud amount + `COST_FP=10` per false alarm); the **deployed 8-feature model is retrained separately and has its own threshold (~0.09)** stored in `model.joblib` — these are different models, don't conflate their thresholds.
-- Risk policy is 3-tier: below `threshold` → auto-approve, `[threshold, block_threshold)` → manual-review, `≥ block_threshold` (~0.80, calibrated to test precision ≥ 0.99) → auto-block (`deployment/scoring.py`).
+- Risk policy is 3-tier: below `threshold` → auto-approve, `[threshold, block_threshold)` → manual-review, `≥ block_threshold` (~0.80) → auto-block (`deployment/scoring.py`). The Module 6 cell *targets* the smallest score with test precision ≥ 0.99, but the reduced 8-feature deploy model never reaches it, so `block_threshold` falls back to the literal 0.80 — treat it as a conservative chosen operating point, not a data-calibrated one.
 
 ## Verification
 
-There **is** a committed pytest suite (`tests/`, run with `pixi run test`): `test_scoring.py` (featurize + 3-tier decide), `test_monitoring_core.py` (PSI/drift/rolling/triggers, incl. the effect-size-not-p-value rule), `test_api.py` (FastAPI TestClient), `test_build_monitoring.py`, `test_pdf_to_pptx.py`. Tests use a scikit-learn stand-in model via `MODEL_PATH` (see `tests/conftest.py`), so they don't need the trained bundle or the 493 MB dataset, and are hermetic (never write into deliverable paths). For quick checks of edited notebook cells, still prefer syntax/`nbformat.validate` + small synthetic DataFrames over a full 3-min notebook run.
+There **is** a committed pytest suite (`tests/`, run with `pixi run test`): `test_scoring.py` (featurize + 3-tier decide), `test_monitoring_core.py` (PSI/drift/rolling/triggers, incl. the effect-size-not-p-value rule), `test_api.py` (FastAPI TestClient), `test_build_monitoring.py`, `test_pdf_to_pptx.py`, `test_web_monitoring_parity.py` (the JS port in `web/monitoring.js` vs the Python, skipped when `node` is absent). Tests use a scikit-learn stand-in model via `MODEL_PATH` (see `tests/conftest.py`), so they don't need the trained bundle or the 493 MB dataset, and are hermetic (never write into deliverable paths). For quick checks of edited notebook cells, still prefer syntax/`nbformat.validate` + small synthetic DataFrames over a full 3-min notebook run.

@@ -1,4 +1,4 @@
-# Kịch bản phát biểu — Fraud Detection (Module 1–5)
+# Kịch bản phát biểu — Fraud Detection (Module 1–8)
 
 **Tổng thời lượng:** ~18–20 phút (19 slide chính + 3 slide dự phòng)
 **File slide:** `slides/main.pdf`
@@ -11,7 +11,7 @@
 
 ## Slide 1 — Title *(20 giây)*
 
-> "Chào thầy/cô và các bạn. Nhóm em trình bày đồ án phát hiện gian lận thanh toán thời gian thực cho nền tảng thương mại điện tử, phạm vi từ Module 1 đến Module 5."
+> "Chào thầy/cô và các bạn. Nhóm em trình bày đồ án phát hiện gian lận thanh toán thời gian thực cho nền tảng thương mại điện tử, phạm vi từ Module 1 đến Module 8."
 
 Ngắn gọn, không đọc lại tên slide.
 
@@ -169,7 +169,7 @@ Ngắn gọn, không đọc lại tên slide.
 
 > "Ngưỡng mặc định 0,5 chỉ là quy ước thống kê, không mang ý nghĩa kinh doanh. Nhóm quy đổi đánh đổi ra **tiền**: mỗi vụ bỏ sót mất đúng số tiền giao dịch; mỗi báo động giả tốn một khoản ma sát cố định.
 >
-> Quét toàn bộ ngưỡng, chi phí thấp nhất rơi vào **0,21**, không phải 0,5 — giảm tổng chi phí **16,6%**.
+> Quét toàn bộ ngưỡng, chi phí thấp nhất rơi vào **0,17**, không phải 0,5 — giảm tổng chi phí **14,7%**.
 >
 > Và nhìn hình sẽ thấy đường chi phí **phẳng** ở vùng dưới 0,25 rồi mới dốc lên. Nghĩa là điểm tối ưu là một **cao nguyên**, nên kết quả khá vững trước giả định về chi phí ma sát."
 
@@ -177,7 +177,7 @@ Ngắn gọn, không đọc lại tên slide.
 
 ## Slide 16 — Kết quả nghiệp vụ *(1 phút)*
 
-> "Tại ngưỡng 0,21: mô hình chặn được **99,96% giá trị gian lận**, chỉ để lọt 1,36 triệu, với tỉ lệ chặn nhầm chỉ **0,031%** — tức 260 giao dịch.
+> "Tại ngưỡng 0,17: mô hình chặn được **99,96% giá trị gian lận**, chỉ để lọt 1,36 triệu, với tỉ lệ chặn nhầm chỉ **0,032%** — tức 265 giao dịch.
 >
 > Để so sánh: hệ thống luật sẵn có trong PaySim chỉ bắt được **16 vụ**, còn mô hình của nhóm bắt **2.451 trên 2.459**."
 
@@ -199,11 +199,43 @@ Ngắn gọn, không đọc lại tên slide.
 
 ---
 
+## Triển khai — API + hàng đợi review (Module 6) *(1 phút)*
+
+> "Sang phần triển khai — Module 6. Mô hình không dừng ở notebook: nhóm đóng gói thành **API thời gian thực** (FastAPI, endpoint `/predict`) và một **giao diện hàng đợi review** cho nhân viên (Streamlit). Mỗi giao dịch vào nhận một quyết định **3 mức** kèm nhật ký hành động.
+>
+> Và để thầy/cô kiểm chứng trực tiếp, nhóm có bản **demo chạy thẳng trên trình duyệt** — toàn bộ mô hình 300 cây chạy phía client, không cần server, và khớp với API Python tới 2×10⁻⁷."
+
+**Nhấn:** Đây chính là "live link" đề yêu cầu — mở được ngay, không cần cài đặt.
+
+---
+
+## Giám sát — trôi dữ liệu & huấn luyện lại (Module 7) *(1 phút)*
+
+> "Module 7 — giám sát. Mô hình sẽ xuống cấp khi dữ liệu thật đổi theo thời gian, nên nhóm **tự viết** một thư viện giám sát (không dùng thư viện ngoài, để đảm bảo tính nguyên bản) rồi kết xuất ra dashboard HTML.
+>
+> Điểm nhóm muốn nhấn: nhóm gắn cảnh báo trôi dữ liệu vào **độ lớn hiệu ứng** (PSI, thống kê KS), **không** vào p-value. Vì ở quy mô hơn 400 nghìn giao dịch mỗi cửa sổ, p-value luôn xấp xỉ 0 và sẽ báo động giả toàn bộ — trên dữ liệu thật, cả 8/8 đặc trưng có p-value ≈ 0 nhưng **không** đặc trưng nào lệch thực sự.
+>
+> Nhóm còn thêm một bài **kiểm thử chịu tải** bơm nhiễu vào để chứng minh cơ chế cảnh báo **thật sự kích hoạt**, chứ không chỉ luôn báo 'ổn'."
+
+**Nhấn:** "Đo độ lớn hiệu ứng, không đo p-value" — đây là điểm phương pháp đáng ghi điểm nhất của module này.
+
+---
+
+## Chính sách rủi ro — từ điểm số đến hành động (Module 8) *(45 giây)*
+
+> "Cuối cùng, Module 8 — biến một điểm số thành hành động nghiệp vụ. **Ba mức**: dưới ngưỡng vận hành thì duyệt tự động; vùng giữa đẩy sang nhân viên review; chỉ khi điểm rất cao mới chặn tự động.
+>
+> Ngưỡng vận hành của mô hình triển khai là **0,09** (chọn theo chi phí, khác 0,17 của mô hình phân tích). Ngưỡng chặn tự động **b ≈ 0,80**: nhóm **nhắm tới** precision ≥ 0,99, nhưng mô hình 8 đặc trưng không đạt mức đó nên nhóm **lùi về mức thận trọng 0,80** — chặn tự động chỉ dành cho trường hợp gần như chắc chắn.
+>
+> Tín hiệu đẩy một giao dịch lên cao vẫn là `errorBalanceOrig` — số dư gốc không khớp với số tiền chuyển."
+
+---
+
 ## Slide 18 — Kết luận *(1 phút)*
 
-> "Tóm lại, nhóm đã hoàn thành trọn vẹn Module 1 đến 5: hai nguồn dữ liệu với data dictionary đầy đủ, làm sạch có nhật ký kiểm chứng, 3 thuật toán trên 2 bộ đặc trưng, và ngưỡng vận hành chọn theo chi phí.
+> "Tóm lại, nhóm đã hoàn thành trọn vẹn Module 1 đến 8: hai nguồn dữ liệu với data dictionary đầy đủ, làm sạch có nhật ký kiểm chứng, 3 thuật toán trên 2 bộ đặc trưng, ngưỡng vận hành chọn theo chi phí, cùng với triển khai API + hàng đợi review, giám sát trôi dữ liệu, và chính sách rủi ro 3 mức.
 >
-> Khuyến nghị: **Random Forest Base** là mô hình trung thực tốt nhất; **XGBoost Base** để triển khai vì gọn và nhanh; vận hành tại ngưỡng 0,21.
+> Khuyến nghị: **Random Forest Base** là mô hình trung thực tốt nhất; **XGBoost Base** để triển khai vì gọn và nhanh; vận hành tại ngưỡng 0,17 (mô hình phân tích) — mô hình triển khai dùng ngưỡng riêng ≈0,09.
 >
 > Nhưng điều nhóm tâm đắc nhất không phải điểm số, mà là: nhóm đã **biến một lỗ hổng rò rỉ nhãn tiềm ẩn thành một đại lượng đo được**, và giải thích được chính xác vì sao điểm của mình lại cao."
 
